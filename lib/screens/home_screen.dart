@@ -86,7 +86,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     _Slide(
       tag: 'DOORSTEP SERVICE',
       title: 'Professional Car\nWash at Your\nDoorstep',
-      sub: 'Trained team at your home\n7 days a week • 8 AM–6 PM',
+//       sub: 'Trained team at your home\n7 days a week • 8 AM–6 PM',
       emoji: '🚗',
       cta: 'Book Now',
       service: null,
@@ -95,7 +95,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     _Slide(
       tag: 'EXTERIOR + INTERIOR',
       title: 'Deep Foam Wash\n+ Interior Clean\nFrom ₹449',
-      sub: 'Foam wash • Vacuum • Dashboard\nTyre polish • Black part polish',
+//       sub: 'Foam wash • Vacuum • Dashboard\nTyre polish • Black part polish',
       emoji: '🫧',
       cta: 'Book Wash',
       service: 'oneTime',
@@ -104,7 +104,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     _Slide(
       tag: 'PREMIUM DETAILING',
       title: '3M Wax & Rubbing\nShowroom Shine\nFrom ₹649',
-      sub: 'Full body rubbing • 3M wax\nProfessional-grade treatment',
+//       sub: 'Full body rubbing • 3M wax\nProfessional-grade treatment',
       emoji: '✨',
       cta: 'Book Detailing',
       service: 'premiumAddons',
@@ -113,7 +113,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     _Slide(
       tag: 'MONTHLY PACKAGE',
       title: '3 Washes Every\nMonth at Your\nDoorstep ₹1,399',
-      sub: 'Best value • Free air freshener\nFree dustbin • All inclusive',
+//       sub: 'Best value • Free air freshener\nFree dustbin • All inclusive',
       emoji: '📅',
       cta: 'Subscribe',
       service: 'completeCare',
@@ -178,11 +178,11 @@ class _HeroCarouselState extends State<_HeroCarousel> {
 }
 
 class _Slide {
-  final String tag, title, sub, emoji, cta;
+  final String tag, title, emoji, cta;
   final String? service;
   final List<Color> grad;
   const _Slide({
-    required this.tag, required this.title, required this.sub,
+    required this.tag, required this.title,
     required this.emoji, required this.cta, required this.service,
     required this.grad,
   });
@@ -247,9 +247,9 @@ class _SlideView extends StatelessWidget {
                           fontSize: 20, fontWeight: FontWeight.w900,
                           height: 1.15, letterSpacing: -0.3)),
                   // Sub
-                  Text(slide.sub,
-                      style: const TextStyle(
-                          color: Colors.white60, fontSize: 11, height: 1.4)),
+//                   Text(slide.sub,
+//                       style: const TextStyle(
+//                           color: Colors.white60, fontSize: 11, height: 1.4)),
                   // CTA chip
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
