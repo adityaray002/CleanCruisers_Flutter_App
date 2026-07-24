@@ -26,7 +26,7 @@
     <application
         android:label="CleanCruisers"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/LaunchTheme"
         android:usesCleartextTraffic="true">

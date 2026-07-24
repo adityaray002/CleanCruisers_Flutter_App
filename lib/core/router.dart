@@ -9,20 +9,24 @@ import '../screens/blog_list_screen.dart';
 import '../screens/blog_detail_screen.dart';
 import '../screens/contact_screen.dart';
 import '../screens/onboarding_screen.dart';
+import '../screens/splash_screen.dart';
 import 'constants.dart';
 
 final onboardingDoneProvider = StateProvider<bool>((ref) => false);
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final onboardingDone = ref.watch(onboardingDoneProvider);
   return GoRouter(
-    initialLocation: onboardingDone ? '/home' : '/onboarding',
+    initialLocation: '/splash',
     redirect: (context, state) {
-      if (state.uri.toString() == '/') return '/home';
+      if (state.uri.toString() == '/') return '/splash';
       return null;
     },
     errorBuilder: (context, state) => const _NotFoundScreen(),
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (_, __) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/onboarding',
         builder: (_, __) => const OnboardingScreen(),
