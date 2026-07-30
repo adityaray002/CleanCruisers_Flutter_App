@@ -21,6 +21,7 @@ class HomeScreen extends StatelessWidget {
             SliverToBoxAdapter(child: _ServiceTiles()),
             SliverToBoxAdapter(child: _StatStrip()),
             SliverToBoxAdapter(child: _HowItWorks()),
+            SliverToBoxAdapter(child: _OurWork()),
             SliverToBoxAdapter(child: _Reviews()),
             SliverToBoxAdapter(child: _BottomCta()),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -86,11 +87,11 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     _Slide(
       tag: 'DOORSTEP SERVICE',
       title: 'Professional Car\nWash at Your\nDoorstep',
-//       sub: 'Trained team at your home\n7 days a week • 8 AM–6 PM',
       emoji: '🚗',
       cta: 'Book Now',
       service: null,
       grad: [Color(0xFF064E24), Color(0xFF031A0C)],
+      imagePath: 'assets/images/video_team_branded.jpg',
     ),
     _Slide(
       tag: 'EXTERIOR + INTERIOR',
@@ -100,6 +101,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
       cta: 'Book Wash',
       service: 'oneTime',
       grad: [Color(0xFF0A3A5C), Color(0xFF021422)],
+      imagePath: 'assets/images/video_foam_hood.jpg',
     ),
     _Slide(
       tag: 'PREMIUM DETAILING',
@@ -109,6 +111,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
       cta: 'Book Detailing',
       service: 'premiumAddons',
       grad: [Color(0xFF2D1B4E), Color(0xFF0E0520)],
+      imagePath: 'assets/images/photo_after_tata.jpg',
     ),
     _Slide(
       tag: 'MONTHLY PACKAGE',
@@ -179,12 +182,12 @@ class _HeroCarouselState extends State<_HeroCarousel> {
 
 class _Slide {
   final String tag, title, emoji, cta;
-  final String? service;
+  final String? service, imagePath;
   final List<Color> grad;
   const _Slide({
     required this.tag, required this.title,
     required this.emoji, required this.cta, required this.service,
-    required this.grad,
+    required this.grad, this.imagePath,
   });
 }
 
@@ -199,17 +202,37 @@ class _SlideView extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: slide.grad,
-          ),
+          gradient: slide.imagePath == null
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: slide.grad,
+                )
+              : null,
           border: Border.all(color: kGreen400.withAlpha(50)),
         ),
         child: Stack(
           children: [
+            // Real photo background
+            if (slide.imagePath != null) ...[
+              Positioned.fill(
+                child: Image.asset(slide.imagePath!, fit: BoxFit.cover),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerRight,
+                      end: Alignment.centerLeft,
+                      colors: [Colors.transparent, Colors.black.withAlpha(210)],
+                    ),
+                  ),
+                ),
+              ),
+            ],
             // Background texture circle
             Positioned(
               right: -20, top: -20,
@@ -246,10 +269,6 @@ class _SlideView extends StatelessWidget {
                           color: Colors.white,
                           fontSize: 20, fontWeight: FontWeight.w900,
                           height: 1.15, letterSpacing: -0.3)),
-                  // Sub
-//                   Text(slide.sub,
-//                       style: const TextStyle(
-//                           color: Colors.white60, fontSize: 11, height: 1.4)),
                   // CTA chip
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -265,12 +284,13 @@ class _SlideView extends StatelessWidget {
                 ],
               ),
             ),
-            // Emoji illustration
-            Positioned(
-              right: 14, bottom: 14,
-              child: Text(slide.emoji,
-                  style: const TextStyle(fontSize: 66)),
-            ),
+            // Emoji illustration (only on non-photo slides)
+            if (slide.imagePath == null)
+              Positioned(
+                right: 14, bottom: 14,
+                child: Text(slide.emoji,
+                    style: const TextStyle(fontSize: 66)),
+              ),
           ],
         ),
       ),
@@ -511,6 +531,90 @@ class _HowItWorks extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Our Work Gallery ──────────────────────────────────────────────────────────
+class _OurWork extends StatelessWidget {
+  static const _items = [
+    ('assets/images/video_team_branded.jpg', 'Certified team'),
+    ('assets/images/photo_clean_kia.jpg', 'Clean result'),
+    ('assets/images/service_detailing.jpg', 'Mirror shine'),
+    ('assets/images/customer_happy.jpg', 'Happy customer'),
+    ('assets/images/photo_team_polishing.jpg', 'Final polish'),
+    ('assets/images/service_carwash.jpg', 'Wash in progress'),
+    ('assets/images/service_monthly.jpg', 'Satisfied customer'),
+    ('assets/images/video_waterjet.jpg', 'Power rinse'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 28, 20, 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              const Text('Our Work',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(width: 8),
+              Text('Real jobs · Real results',
+                  style: TextStyle(
+                      color: kGray400.withAlpha(200), fontSize: 12)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 175,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _items.length,
+            itemBuilder: (_, i) => Container(
+              width: 140,
+              margin: const EdgeInsets.only(right: 12),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: kGray700.withAlpha(80)),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(_items[i].$1, fit: BoxFit.cover),
+                  Positioned(
+                    bottom: 0, left: 0, right: 0,
+                    child: DecoratedBox(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0xDD000000), Colors.transparent],
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 24, 10, 10),
+                        child: Text(_items[i].$2,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

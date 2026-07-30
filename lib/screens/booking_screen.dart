@@ -190,52 +190,70 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
-// ── Step 0: Service Type ──────────────────────────────────────────────────────
+// ── Step 0: Service Type ─────────────────────────────────────────────────────
 class _ServiceTypeStep extends ConsumerWidget {
   const _ServiceTypeStep();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('What kind of service do\nyou need?',
+          const Text('Choose a Service',
               style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24, fontWeight: FontWeight.w800, height: 1.2)),
-          const SizedBox(height: 8),
-          const Text('Select a service type to get started.',
-              style: TextStyle(color: kGray400, fontSize: 14)),
+                  color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Icon(Icons.location_on, size: 13, color: kGreen400),
+            const SizedBox(width: 4),
+            Text('Delhi NCR  ·  8AM – 6PM  ·  No advance payment',
+                style: TextStyle(color: kGray400.withAlpha(200), fontSize: 12)),
+          ]),
           const SizedBox(height: 28),
-          _ServiceTypeCard(
-            emoji: '🚿',
+          _ServiceCard(
+            imagePath: 'assets/images/service_carwash.jpg',
+            badge: null,
             title: 'Car Wash & Care',
-            subtitle: 'One-Time Doorstep Wash',
-            desc: 'Foam wash, interior vacuum, dashboard & tyre polish.',
-            priceFrom: '₹${washPackagePrices[WashPackage.exteriorOnly]![CarType.hatchback]!}',
-            duration: '1–2 hours',
+            subtitle: 'Quick one-time doorstep wash',
+            price: '₹${washPackagePrices[WashPackage.exteriorOnly]![CarType.hatchback]!}',
+            features: const [
+              'High-pressure foam wash',
+              'Interior vacuum & wipe',
+              'Tyre dressing & dash polish',
+            ],
+            duration: '1 – 2 hrs',
             type: ServiceType.oneTime,
           ),
-          const SizedBox(height: 14),
-          _ServiceTypeCard(
-            emoji: '✨',
+          const SizedBox(height: 16),
+          _ServiceCard(
+            imagePath: 'assets/images/service_detailing.jpg',
+            badge: 'POPULAR',
             title: 'Complete Car Care',
-            subtitle: 'Premium Detailing Add-ons',
-            desc: 'Rubbing, 3M wax, dry cleaning & more premium services.',
-            priceFrom: '₹${premiumAddonPrices['3m-wax-exterior']![CarType.hatchback]!}',
-            duration: '2–3 hours',
+            subtitle: 'Deep detailing & polishing',
+            price: '₹${premiumAddonPrices['3m-wax-exterior']![CarType.hatchback]!}',
+            features: const [
+              'Rubbing, buffing & paint restore',
+              '3M wax for lasting shine',
+              'Interior dry clean & deodorize',
+            ],
+            duration: '2 – 3 hrs',
             type: ServiceType.premiumAddons,
           ),
-          const SizedBox(height: 14),
-          _ServiceTypeCard(
-            emoji: '📅',
+          const SizedBox(height: 16),
+          _ServiceCard(
+            imagePath: 'assets/images/service_monthly.jpg',
+            badge: 'BEST VALUE',
             title: 'Monthly Package',
-            subtitle: '3 Premium Washes / Month',
-            desc: 'Regular monthly care with interior + exterior cleaning. Includes free dustbin & air freshener.',
-            priceFrom: '₹${completeCarePrice[CarType.hatchback]!}',
-            duration: '3 washes included',
+            subtitle: '3 premium washes every month',
+            price: '₹${completeCarePrice[CarType.hatchback]!}',
+            features: const [
+              '3 sessions per month',
+              'Interior + exterior each time',
+              'Free dustbin & air freshener',
+            ],
+            duration: '3 sessions / month',
             type: ServiceType.completeCare,
           ),
         ],
@@ -244,13 +262,21 @@ class _ServiceTypeStep extends ConsumerWidget {
   }
 }
 
-class _ServiceTypeCard extends ConsumerWidget {
-  final String emoji, title, subtitle, desc, priceFrom, duration;
+class _ServiceCard extends ConsumerWidget {
+  final String imagePath;
+  final String? badge;
+  final String title, subtitle, price, duration;
+  final List<String> features;
   final ServiceType type;
 
-  const _ServiceTypeCard({
-    required this.emoji, required this.title, required this.subtitle,
-    required this.desc, required this.priceFrom, required this.duration,
+  const _ServiceCard({
+    required this.imagePath,
+    required this.badge,
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    required this.features,
+    required this.duration,
     required this.type,
   });
 
@@ -262,56 +288,146 @@ class _ServiceTypeCard extends ConsumerWidget {
         ref.read(bookingProvider.notifier).selectServiceType(type);
       },
       child: Container(
-        padding: const EdgeInsets.all(20),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: kBgCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: kGray700.withAlpha(128)),
+          border: Border.all(color: kGray700.withAlpha(80)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Text(emoji, style: const TextStyle(fontSize: 26)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16, fontWeight: FontWeight.w700)),
-                    Text(subtitle,
-                        style: const TextStyle(color: kGray400, fontSize: 12)),
-                  ],
-                ),
+
+            // ── Photo header ──────────────────────────────────────────────────
+            SizedBox(
+              height: 130,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(imagePath, fit: BoxFit.cover),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x22000000), Color(0xBB000000)],
+                      ),
+                    ),
+                  ),
+                  if (badge != null)
+                    Positioned(
+                      top: 10, left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: kGreen400.withAlpha(40),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: kGreen400.withAlpha(160)),
+                        ),
+                        child: Text(badge!,
+                            style: const TextStyle(
+                                color: kGreen400,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8)),
+                      ),
+                    ),
+                ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: kGreen400.withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: kGreen400.withAlpha(77)),
-                ),
-                child: Text('From $priceFrom',
-                    style: const TextStyle(
-                        color: kGreen400, fontSize: 11, fontWeight: FontWeight.w700)),
+            ),
+
+            // ── Card body ────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title + price
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(title,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('from',
+                              style: TextStyle(
+                                  color: kGray400.withAlpha(150),
+                                  fontSize: 10)),
+                          Text(price,
+                              style: const TextStyle(
+                                  color: kGreen400,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(subtitle,
+                      style: const TextStyle(color: kGray400, fontSize: 12)),
+                  const SizedBox(height: 12),
+
+                  // Features
+                  ...features.map((f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Icon(Icons.check_circle,
+                              size: 13, color: kGreen400.withAlpha(200)),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(f,
+                              style: const TextStyle(
+                                  color: kGray400,
+                                  fontSize: 12.5,
+                                  height: 1.3)),
+                        ),
+                      ],
+                    ),
+                  )),
+
+                  const SizedBox(height: 10),
+                  Divider(height: 1, color: kGray700.withAlpha(80)),
+                  const SizedBox(height: 10),
+
+                  // Footer: duration + CTA
+                  Row(
+                    children: [
+                      Icon(Icons.schedule,
+                          size: 12, color: kGray400.withAlpha(150)),
+                      const SizedBox(width: 4),
+                      Text(duration,
+                          style: TextStyle(
+                              color: kGray400.withAlpha(150),
+                              fontSize: 11.5)),
+                      const Spacer(),
+                      const Text('Book now',
+                          style: TextStyle(
+                              color: kGreen400,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 3),
+                      const Icon(Icons.arrow_forward,
+                          size: 13, color: kGreen400),
+                    ],
+                  ),
+                ],
               ),
-            ]),
-            const SizedBox(height: 10),
-            Text(desc,
-                style: const TextStyle(color: kGray400, fontSize: 13, height: 1.4)),
-            const SizedBox(height: 12),
-            Row(children: [
-              const Icon(Icons.schedule, size: 13, color: kGray400),
-              const SizedBox(width: 4),
-              Text(duration, style: const TextStyle(color: kGray400, fontSize: 12)),
-              const Spacer(),
-              const Text('Tap to select →',
-                  style: TextStyle(
-                      color: kGreen400, fontSize: 12, fontWeight: FontWeight.w600)),
-            ]),
+            ),
           ],
         ),
       ),
