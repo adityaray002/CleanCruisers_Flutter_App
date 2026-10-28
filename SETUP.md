@@ -26,16 +26,6 @@ flutter run
 flutter run
 ```
 
-## 4. Add App Logo
-
-Copy your logo file to:
-```
-assets/images/logo.png
-```
-
-The app currently uses a green car-wash icon in place of the logo. Replace it by
-adding the image and updating the AppBar widget in `home_screen.dart`.
-
 ## 5. Build for Release
 
 ### Android (Play Store)
@@ -78,36 +68,52 @@ Set up in Xcode → Signing & Capabilities with your Apple Developer account.
 
 ```
 lib/
-├── main.dart              — App entry point
+├── main.dart                   — App entry point
 ├── core/
-│   ├── constants.dart     — Colors, phone, email, social links
-│   ├── pricing.dart       — All service pricing data
-│   ├── theme.dart         — Dark theme definition
-│   └── router.dart        — GoRouter navigation
+│   ├── theme.dart              — Design system: colours, spacing, radius, shadows, type, ThemeData
+│   ├── constants.dart          — Phone, WhatsApp, email, social links
+│   ├── pricing.dart            — Raw price tables (mirrors the website)
+│   ├── format.dart             — ₹ and date formatting
+│   └── router.dart             — GoRouter routes
 ├── data/
-│   └── blog_data.dart     — 8 blog posts with full content
+│   ├── business_info.dart      — Hours, areas, ratings, reviews, gallery (verify before release!)
+│   └── blog_data.dart          — Car care articles
 ├── models/
-│   ├── blog_post.dart     — Blog post data model
-│   └── booking_state.dart — Booking wizard state model
+│   ├── service.dart            — Service catalogue (names, photos, prices, inclusions, extras)
+│   └── booking.dart            — Time slots, booking draft, saved bookings, customer profile
 ├── providers/
-│   └── booking_provider.dart — Riverpod state management
+│   └── app_providers.dart      — Riverpod: saved profile, saved bookings, booking draft
 ├── screens/
-│   ├── home_screen.dart       — Main home with all sections
-│   ├── booking_screen.dart    — Multi-step booking wizard
-│   ├── blog_list_screen.dart  — Blog listing
-│   ├── blog_detail_screen.dart — Blog reader
-│   ├── contact_screen.dart    — Contact + about
-│   └── main_shell.dart        — Bottom navigation shell
+│   ├── splash_screen.dart
+│   ├── main_shell.dart         — Bottom nav: Home · Services · Bookings · Profile
+│   ├── home_screen.dart
+│   ├── services_screen.dart
+│   ├── service_detail_screen.dart
+│   ├── booking/                — 4-step flow: Car → Date & time → Address → Review
+│   ├── booking_sent_screen.dart
+│   ├── bookings_screen.dart / booking_detail_screen.dart
+│   ├── profile_screen.dart     — Saved details, support, about, tips
+│   └── blog_list_screen.dart / blog_detail_screen.dart
 └── widgets/
-    ├── green_button.dart   — Primary button components
-    ├── section_header.dart — Section tag + title widget
-    └── inclusion_chip.dart — Price tag + inclusion list item
+    ├── ui.dart                 — Buttons, cards, pills, empty states, bottom action bar
+    ├── service_widgets.dart    — Service image, card and row
+    ├── how_it_works.dart
+    └── contact_actions.dart    — WhatsApp / call / link helpers with error handling
 ```
 
-## Features
+## Updating business content
 
-- **Home Screen**: Hero, 3 service cards, how-it-works, pricing grid, 6 trust features, 4 testimonials, FAQ accordion, CTA
-- **Booking Wizard**: Multi-step flow for all 3 service types with WhatsApp confirmation
-- **Blog**: 8 posts with full markdown content, clickable links
-- **Contact**: Call, WhatsApp, email buttons, address, social links, service areas
-- **Dark theme**: Black + green (#4ADE80) brand colors throughout
+- **Prices** — `lib/core/pricing.dart`
+- **Services** (names, descriptions, photos, what's included) — `lib/models/service.dart`
+- **Hours, areas, rating, customer count, reviews, gallery** — `lib/data/business_info.dart`.
+  Set a figure to `null` (or empty the reviews list) to hide it instead of showing something unverified.
+
+## How booking works
+
+There is no backend. A booking builds a WhatsApp message (with a `CC-XXXXX` reference) to the
+business number; the customer taps Send, and the team confirms on WhatsApp. The booking and the
+customer's details are saved on the device (SharedPreferences) so they appear under **Bookings** and
+pre-fill the next booking.
+
+Fonts: Plus Jakarta Sans is bundled in `assets/google_fonts/` (SIL OFL, see `OFL.txt`), so no font is
+downloaded at runtime.

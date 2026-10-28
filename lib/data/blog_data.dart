@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import '../models/blog_post.dart';
 
-const _green  = Color(0xFF4ADE80);
-const _blue   = Color(0xFF60A5FA);
+const _green = Color(0xFF4ADE80);
+const _blue = Color(0xFF60A5FA);
 const _purple = Color(0xFFA78BFA);
 const _orange = Color(0xFFFB923C);
 
 final List<BlogPost> blogPosts = [
-
-BlogPost(
-  id: 'e20-petrol-car-maintenance-tips',
-  title: '5 Car Maintenance Tips Every E20 Petrol User Should Follow',
-  excerpt: 'Follow these 5 simple car maintenance tips for E20 petrol users to improve engine health, mileage, and keep your car running smoothly every day.',
-  category: 'Car Care Tips',
-  date: 'July 17, 2026',
-  readTime: '6 min read',
-  categoryColor: _green,
-  content: '''
+  const BlogPost(
+    id: 'e20-petrol-car-maintenance-tips',
+    title: '5 Car Maintenance Tips Every E20 Petrol User Should Follow',
+    excerpt:
+        'Follow these 5 simple car maintenance tips for E20 petrol users to improve engine health, mileage, and keep your car running smoothly every day.',
+    category: 'Car Care Tips',
+    date: 'July 17, 2026',
+    readTime: '6 min read',
+    categoryColor: _green,
+    content: '''
 ## 5 Car Maintenance Tips Every E20 Petrol User Should Follow
 
 In fact, this was an expected move and with E20 petrol currently being spotted by a number of car owners at fuel stations, it comes as no surprise that there would be many questions. Will it affect mileage? Is it safe for the engine? Does the car need extra care?
@@ -107,17 +107,17 @@ Mileage may vary depending on car model, driving habit, road condition and maint
 
 For everyday wear, once every one to two weeks is typically sufficient. Clean more frequently during monsoon or in dusty climates.
 ''',
-),
-
-BlogPost(
-  id: 'monthly-car-wash-plans-worth-it',
-  title: 'Monthly Car Wash Plans: Are They Really Worth Your Money?',
-  excerpt: 'Wondering if monthly car wash plans are worth it? Learn the benefits, costs, and why regular doorstep car cleaning helps protect your vehicle.',
-  category: 'Car Care Tips',
-  date: 'July 14, 2026',
-  readTime: '5 min read',
-  categoryColor: _green,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'monthly-car-wash-plans-worth-it',
+    title: 'Monthly Car Wash Plans: Are They Really Worth Your Money?',
+    excerpt:
+        'Wondering if monthly car wash plans are worth it? Learn the benefits, costs, and why regular doorstep car cleaning helps protect your vehicle.',
+    category: 'Car Care Tips',
+    date: 'July 14, 2026',
+    readTime: '5 min read',
+    categoryColor: _green,
+    content: '''
 ## Monthly Car Wash Plans: Are They Really Worth Your Money?
 
 If you've owned a car, you have to know a fact: keeping it clean isn't a one-time process. Dust, pollutants, bird droppings, tree sap, rainwater marks, and street dirt can turn your car's exterior vintage much quicker than expected.
@@ -228,17 +228,17 @@ The value isn't just about looks — it is about keeping your car in better cond
 
 If doorstep car cleaning fits your lifestyle, a monthly plan is worth considering.
 ''',
-),
-
-BlogPost(
-  id: 'signs-car-needs-professional-deep-cleaning',
-  title: '10 Signs Your Car Needs a Professional Deep Cleaning',
-  excerpt: 'Wondering if your car needs a professional deep clean? Look out for these 10 clear signs that tell you it\'s time to book a service.',
-  category: 'Interior Care',
-  date: 'July 8, 2026',
-  readTime: '6 min read',
-  categoryColor: _blue,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'signs-car-needs-professional-deep-cleaning',
+    title: '10 Signs Your Car Needs a Professional Deep Cleaning',
+    excerpt:
+        'Wondering if your car needs a professional deep clean? Look out for these 10 clear signs that tell you it\'s time to book a service.',
+    category: 'Interior Care',
+    date: 'July 8, 2026',
+    readTime: '6 min read',
+    categoryColor: _blue,
+    content: '''
 ## 10 Signs Your Car Needs a Professional Deep Cleaning
 
 Your car might look clean from the outside but still need a deep clean on the inside. Most car owners focus only on the exterior, ignoring the cabin where dust, germs, and odours quietly build up.
@@ -291,17 +291,17 @@ A deep clean is not just about aesthetics. It protects your health, preserves yo
 
 CleanCruisers offers professional doorstep deep cleaning services across Delhi. Book anytime from your home.
 ''',
-),
-
-BlogPost(
-  id: 'how-to-remove-bad-smell-from-car',
-  title: 'How to Remove Bad Smell from Your Car Naturally',
-  excerpt: 'Dealing with a bad smell in your car? Here are natural, easy methods to eliminate odours and keep your car smelling fresh every day.',
-  category: 'Interior Care',
-  date: 'July 3, 2026',
-  readTime: '6 min read',
-  categoryColor: _blue,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'how-to-remove-bad-smell-from-car',
+    title: 'How to Remove Bad Smell from Your Car Naturally',
+    excerpt:
+        'Dealing with a bad smell in your car? Here are natural, easy methods to eliminate odours and keep your car smelling fresh every day.',
+    category: 'Interior Care',
+    date: 'July 3, 2026',
+    readTime: '6 min read',
+    categoryColor: _blue,
+    content: '''
 ## How to Remove Bad Smell from Your Car Naturally
 
 A bad smell inside a car is one of the most annoying problems for any car owner. Whether it is food, pets, mould, or just accumulated staleness, the odour can make every drive uncomfortable.
@@ -364,17 +364,17 @@ If the smell persists after trying home remedies, the source may be mould in the
 
 At CleanCruisers, our interior deep cleaning service uses professional-grade solutions to eliminate odours at the source, leaving your car fresh and hygienic.
 ''',
-),
-
-BlogPost(
-  id: 'importance-of-engine-oil-for-car-maintenance',
-  title: 'The Role of Engine Oil in Better Car Maintenance and Engine Health',
-  excerpt: 'Understand why engine oil is critical for your car\'s health, how to choose the right grade, and when to change it for the best performance.',
-  category: 'Car Care Tips',
-  date: 'June 23, 2026',
-  readTime: '7 min read',
-  categoryColor: _green,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'importance-of-engine-oil-for-car-maintenance',
+    title: 'The Role of Engine Oil in Better Car Maintenance and Engine Health',
+    excerpt:
+        'Understand why engine oil is critical for your car\'s health, how to choose the right grade, and when to change it for the best performance.',
+    category: 'Car Care Tips',
+    date: 'June 23, 2026',
+    readTime: '7 min read',
+    categoryColor: _green,
+    content: '''
 ## The Role of Engine Oil in Better Car Maintenance and Engine Health
 
 Engine oil is one of the most important fluids in your vehicle, yet many car owners only think about it when a warning light appears on the dashboard.
@@ -442,17 +442,17 @@ Checking your oil level monthly takes two minutes. Changing it on schedule costs
 
 A simple habit of maintaining your engine oil can add years to your car's life.
 ''',
-),
-
-BlogPost(
-  id: 'doorstep-car-wash-future',
-  title: 'Why Doorstep Car Wash is the Future of Car Care',
-  excerpt: 'Doorstep car wash is changing how India keeps its cars clean. Here\'s why more people are choosing home-based car cleaning services over traditional car washes.',
-  category: 'Car Care Tips',
-  date: 'December 28, 2024',
-  readTime: '5 min read',
-  categoryColor: _purple,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'doorstep-car-wash-future',
+    title: 'Why Doorstep Car Wash is the Future of Car Care',
+    excerpt:
+        'Doorstep car wash is changing how India keeps its cars clean. Here\'s why more people are choosing home-based car cleaning services over traditional car washes.',
+    category: 'Car Care Tips',
+    date: 'December 28, 2024',
+    readTime: '5 min read',
+    categoryColor: _purple,
+    content: '''
 ## Why Doorstep Car Wash is the Future of Car Care
 
 The traditional way of getting a car washed meant driving to a service centre, waiting in a queue, and spending a significant part of your day getting a service that should have been simple.
@@ -501,17 +501,17 @@ No advance payment is required. Services available 7 days a week, from 7 AM to 8
 
 Book from the app in under 2 minutes.
 ''',
-),
-
-BlogPost(
-  id: 'benefits-of-regular-car-washing',
-  title: '5 Surprising Benefits of Regular Car Washing',
-  excerpt: 'Regular car washing does more than keep your car looking clean. Discover 5 surprising benefits that go beyond just appearance.',
-  category: 'Car Care Tips',
-  date: 'December 5, 2024',
-  readTime: '5 min read',
-  categoryColor: _orange,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'benefits-of-regular-car-washing',
+    title: '5 Surprising Benefits of Regular Car Washing',
+    excerpt:
+        'Regular car washing does more than keep your car looking clean. Discover 5 surprising benefits that go beyond just appearance.',
+    category: 'Car Care Tips',
+    date: 'December 5, 2024',
+    readTime: '5 min read',
+    categoryColor: _orange,
+    content: '''
 ## 5 Surprising Benefits of Regular Car Washing
 
 Most car owners wash their vehicle when it looks dirty. But regular cleaning, even when the car seems reasonably clean, offers benefits that go well beyond appearance.
@@ -566,17 +566,17 @@ A regular cleaning schedule protects your investment, keeps your car running wel
 
 Consider making car cleaning a regular part of your vehicle care routine — not just before special occasions.
 ''',
-),
-
-BlogPost(
-  id: 'complete-guide-car-wax-paint-protection',
-  title: 'Complete Guide to Car Wax and Paint Protection',
-  excerpt: 'Everything you need to know about car waxing, types of wax, how often to wax your car, and why paint protection matters for every car owner.',
-  category: 'Detailing',
-  date: 'December 20, 2024',
-  readTime: '7 min read',
-  categoryColor: _purple,
-  content: '''
+  ),
+  const BlogPost(
+    id: 'complete-guide-car-wax-paint-protection',
+    title: 'Complete Guide to Car Wax and Paint Protection',
+    excerpt:
+        'Everything you need to know about car waxing, types of wax, how often to wax your car, and why paint protection matters for every car owner.',
+    category: 'Detailing',
+    date: 'December 20, 2024',
+    readTime: '7 min read',
+    categoryColor: _purple,
+    content: '''
 ## Complete Guide to Car Wax and Paint Protection
 
 Car wax is one of the most effective and affordable ways to protect your car's paint and maintain its shine. Yet many car owners skip it, either because they do not know its benefits or because they are unsure which type to use.
@@ -637,6 +637,5 @@ DIY waxing is possible with the right products and technique. However, professio
 
 At CleanCruisers, our 3M Wax service applies a professional-grade protective wax coat after a thorough exterior foam wash, leaving your car with deep shine and protected paint.
 ''',
-),
-
+  ),
 ];

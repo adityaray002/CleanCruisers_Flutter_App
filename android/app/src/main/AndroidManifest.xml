@@ -5,7 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <!-- No CALL_PHONE: the call button opens the dialer via tel:, which needs
+         no permission. -->
 
     <!-- queries must be direct child of manifest, NOT inside application -->
     <queries>
@@ -28,8 +29,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:enableOnBackInvokedCallback="true"
-        android:theme="@style/LaunchTheme"
-        android:usesCleartextTraffic="true">
+        android:theme="@style/LaunchTheme">
 
         <activity
             android:name=".MainActivity"

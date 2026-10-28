@@ -2,9 +2,7 @@
 
 enum CarType { hatchback, sedan, suv, luxury }
 
-enum ServiceType { oneTime, premiumAddons, completeCare }
-
-enum WashPackage { exteriorInterior, exteriorOnly, interiorOnly }
+enum WashPackage { exteriorInterior, exteriorOnly, interiorOnly, bucket }
 
 const Map<CarType, String> carTypeNames = {
   CarType.hatchback: 'Hatchback',
@@ -13,11 +11,11 @@ const Map<CarType, String> carTypeNames = {
   CarType.luxury: 'Luxury',
 };
 
-const Map<CarType, String> carTypeIcons = {
-  CarType.hatchback: '🚗',
-  CarType.sedan: '🚘',
-  CarType.suv: '🚙',
-  CarType.luxury: '🏎',
+const Map<CarType, String> carTypeExamples = {
+  CarType.hatchback: 'Swift, WagonR, i20',
+  CarType.sedan: 'City, Dzire, Verna',
+  CarType.suv: 'Creta, Brezza, Fortuner',
+  CarType.luxury: 'BMW, Audi, Mercedes',
 };
 
 // ── One-Time Wash Package Prices ───────────────────────────────────────────────
@@ -40,12 +38,19 @@ const Map<WashPackage, Map<CarType, int>> washPackagePrices = {
     CarType.suv: 399,
     CarType.luxury: 399,
   },
+  WashPackage.bucket: {
+    CarType.hatchback: 249,
+    CarType.sedan: 249,
+    CarType.suv: 299,
+    CarType.luxury: 299,
+  },
 };
 
 const Map<WashPackage, String> washPackageNames = {
   WashPackage.exteriorInterior: 'Exterior + Interior Wash',
   WashPackage.exteriorOnly: 'Exterior Wash Only',
   WashPackage.interiorOnly: 'Interior Deep Clean',
+  WashPackage.bucket: 'Bucket Wash',
 };
 
 const Map<WashPackage, List<String>> washPackageInclusions = {
@@ -73,7 +78,15 @@ const Map<WashPackage, List<String>> washPackageInclusions = {
     'Seats vacuuming',
     'Dicky vacuuming',
   ],
+  WashPackage.bucket: bucketWashInclusions,
 };
+
+const bucketWashInclusions = [
+  'Exterior body wash & microfiber wipe',
+  'Glass & mirror cleaning',
+  'Tyre & wheel wipe',
+  'Interior & footmat dusting',
+];
 
 // ── Optional Wash Add-ons ──────────────────────────────────────────────────────
 const Map<String, String> washAddonNames = {
@@ -108,7 +121,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'rubbing-exterior',
     name: 'Rubbing + Exterior Foam Wash',
-    description: 'A deep paint restoration service that removes oxidation, light scratches, and dullness, followed by a premium foam wash for a glossy finish.',
+    description:
+        'A deep paint restoration service that removes oxidation, light scratches, and dullness, followed by a premium foam wash for a glossy finish.',
     inclusions: [
       'Full Body Rubbing & Buffing (Rotary Machine)',
       'Exterior Foam Shampoo Wash',
@@ -121,7 +135,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: '3m-wax-exterior',
     name: '3M Wax + Exterior Foam Wash',
-    description: 'A high-quality wax polish by 3M for paint protection and shine, combined with a professional foam wash.',
+    description:
+        'A high-quality wax polish by 3M for paint protection and shine, combined with a professional foam wash.',
     inclusions: [
       '3M Wax Polish',
       'Exterior Foam Shampoo Wash',
@@ -134,7 +149,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'rubbing-wax-exterior',
     name: 'Rubbing + 3M Wax + Exterior Foam Wash',
-    description: 'A complete exterior treatment with rubbing, wax, and foam wash for maximum shine and protection.',
+    description:
+        'A complete exterior treatment with rubbing, wax, and foam wash for maximum shine and protection.',
     inclusions: [
       'Full Body Rubbing & Buffing (Rotary Machine)',
       '3M Wax Polish',
@@ -148,7 +164,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'full-package',
     name: 'Rubbing + 3M Wax + Dry Cleaning + Exterior Foam Wash',
-    description: 'Complete car care – inside and out. Our most comprehensive package for a full showroom-level transformation.',
+    description:
+        'Complete car care – inside and out. Our most comprehensive package for a full showroom-level transformation.',
     inclusions: [
       'Full Body Rubbing & Buffing (Rotary Machine)',
       '3M Wax Polish',
@@ -172,7 +189,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'rubbing-dryclean-exterior',
     name: 'Rubbing + Dry Cleaning + Exterior Foam Wash',
-    description: 'Exterior paint polish plus full interior dry cleaning — the best of both worlds.',
+    description:
+        'Exterior paint polish plus full interior dry cleaning — the best of both worlds.',
     inclusions: [
       'Full Body Rubbing & Buffing (Rotary Machine)',
       'Exterior Foam Shampoo Wash',
@@ -195,7 +213,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'dryclean-wax-exterior',
     name: 'Dry Cleaning + 3M Wax + Exterior Foam Wash',
-    description: 'Balanced inside-out care with 3M wax protection and a deep interior dry clean.',
+    description:
+        'Balanced inside-out care with 3M wax protection and a deep interior dry clean.',
     inclusions: [
       '3M Wax Polish',
       'Exterior Foam Shampoo Wash',
@@ -214,7 +233,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'dry-cleaning',
     name: 'Dry Cleaning',
-    description: 'Deep interior cleaning for seats, mats, roof, and dashboard. Makes your cabin feel brand new.',
+    description:
+        'Deep interior cleaning for seats, mats, roof, and dashboard. Makes your cabin feel brand new.',
     inclusions: [
       'Car Interior Dashboard Cleaning & Polishing',
       'Deep Clean & Shampoo Of Car Seats (Upholstery)',
@@ -231,7 +251,8 @@ const premiumAddons = <AddonService>[
   AddonService(
     id: 'air-freshener',
     name: 'Air Freshener',
-    description: 'Keeps your car smelling fresh and inviting after every drive.',
+    description:
+        'Keeps your car smelling fresh and inviting after every drive.',
     inclusions: [
       'Premium Long-Lasting Fragrance',
       'Keeps Cabin Fresh & Pleasant',
@@ -311,10 +332,15 @@ const completeCareInclusions = [
   '3 Premium Washes Included',
 ];
 
-// ── Monthly Doorstep Plan ───────────────────────────────────────────────────────
-const Map<CarType, int> monthlyPlanPrice = {
+// ── Monthly Bucket Wash Plan (4 washes / month) ─────────────────────────────────
+const Map<CarType, int> bucketPlanPrice = {
   CarType.hatchback: 799,
   CarType.sedan: 799,
   CarType.suv: 999,
   CarType.luxury: 1199,
 };
+
+const bucketPlanInclusions = [
+  ...bucketWashInclusions,
+  '4 Bucket Washes Included',
+];

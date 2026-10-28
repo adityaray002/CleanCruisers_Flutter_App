@@ -1,33 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'core/theme.dart';
 import 'core/router.dart';
+import 'core/theme.dart';
+import 'providers/app_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Check if onboarding has been completed before
+  // Brand font is bundled in assets/google_fonts — no network needed.
+  GoogleFonts.config.allowRuntimeFetching = false;
   final prefs = await SharedPreferences.getInstance();
-  final onboardingDone = prefs.getBool('onboarding_done') ?? false;
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFF141A1C),
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(AppTheme.overlayDark);
 
   runApp(
     ProviderScope(
-      overrides: [
-        onboardingDoneProvider.overrideWith((ref) => onboardingDone),
-      ],
+      overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
       child: const CleanCruisersApp(),
     ),
   );
@@ -38,12 +32,20 @@ class CleanCruisersApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'CleanCruisers',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
-      routerConfig: router,
+      theme: AppTheme.light,
+      routerConfig: ref.watch(routerProvider),
+      builder: (context, child) {
+        // Respect the user's text size, but cap it so layouts stay usable.
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data:
+              mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: 1.3)),
+          child: child!,
+        );
+      },
     );
   }
 }

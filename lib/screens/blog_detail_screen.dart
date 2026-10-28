@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
+import '../core/theme.dart';
 import '../data/blog_data.dart';
 import '../models/blog_post.dart';
+import '../widgets/contact_actions.dart';
+import '../widgets/ui.dart';
 
 class BlogDetailScreen extends StatelessWidget {
   final String id;
@@ -15,8 +17,18 @@ class BlogDetailScreen extends StatelessWidget {
     final post = blogPosts.where((p) => p.id == id).firstOrNull;
     if (post == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Post Not Found')),
-        body: const Center(child: Text('Blog post not found.')),
+        appBar: AppBar(),
+        body: Center(
+          child: EmptyState(
+            icon: Icons.article_outlined,
+            title: 'Article not found',
+            message: 'It may have been moved.',
+            action: PrimaryButton(
+                label: 'All tips',
+                expand: false,
+                onPressed: () => context.go('/blog')),
+          ),
+        ),
       );
     }
     return _PostView(post: post);
@@ -30,198 +42,91 @@ class _PostView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBgBlack,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: kBgBlack,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => context.pop(),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.open_in_browser, color: kGray400),
-                onPressed: () => launchUrl(
-                  Uri.parse('https://cleancruisers.in/blog/${post.id}'),
-                  mode: LaunchMode.externalApplication,
-                ),
-              ),
-            ],
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        actions: [
+          IconButton(
+            tooltip: 'Open on website',
+            icon: const Icon(Icons.open_in_new_rounded),
+            onPressed: () => openLink(context, '$kWebsite/blog/${post.id}'),
           ),
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header section
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        post.categoryColor.withAlpha(20),
-                        kBgBlack,
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: post.categoryColor.withAlpha(26),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                                color: post.categoryColor.withAlpha(77)),
-                          ),
-                          child: Text(post.category,
-                              style: TextStyle(
-                                  color: post.categoryColor,
-                                  fontSize: 11, fontWeight: FontWeight.w700)),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(post.readTime,
-                            style: const TextStyle(
-                                color: kGray400, fontSize: 12)),
-                      ]),
-                      const SizedBox(height: 14),
-                      Text(post.title,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22, fontWeight: FontWeight.w800,
-                              height: 1.25)),
-                      const SizedBox(height: 14),
-                      Row(children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: kGreen400,
-                          backgroundImage: const AssetImage('assets/images/logo.png'),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('CleanCruisers Team',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13, fontWeight: FontWeight.w600)),
-                            Text(post.date,
-                                style: const TextStyle(
-                                    color: kGray400, fontSize: 11)),
-                          ],
-                        ),
-                      ]),
-                    ],
-                  ),
-                ),
-                // Content
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: MarkdownBody(
-                    data: post.content,
-                    styleSheet: _mdStyle(context),
-                    onTapLink: (text, href, title) {
-                      if (href != null) {
-                        launchUrl(Uri.parse(href),
-                            mode: LaunchMode.externalApplication);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(height: 40),
-                // CTA
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [
-                        kGreen500.withAlpha(26),
-                        kBgCard,
-                      ]),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kGreen400.withAlpha(77)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Keep Your Car Clean',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 17, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Book a professional doorstep car wash with CleanCruisers. No advance payment, 7 days a week.',
-                          style: TextStyle(color: kGray400, fontSize: 13, height: 1.4),
-                        ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => context.push('/booking'),
-                            child: const Text('Book Now — Free'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 40),
-              ],
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(AppSpace.page, 4, AppSpace.page, 40),
+        children: [
+          Row(children: [
+            Pill(post.category, tone: PillTone.brand),
+            const SizedBox(width: 10),
+            Text('${post.readTime} · ${post.date}', style: AppText.caption),
+          ]),
+          const SizedBox(height: 14),
+          Text(post.title, style: AppText.h1),
+          const SizedBox(height: 6),
+          Text('By the CleanCruisers team', style: AppText.caption),
+          const SizedBox(height: 10),
+          MarkdownBody(
+            data: post.content,
+            styleSheet: _mdStyle(),
+            onTapLink: (text, href, title) {
+              if (href != null) openLink(context, href);
+            },
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.ink,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Want us to handle it?',
+                  style: AppText.h3.copyWith(color: Colors.white)),
+              const SizedBox(height: 6),
+              Text('Book a doorstep wash or detailing. Pay after the service.',
+                  style:
+                      AppText.small.copyWith(color: const Color(0xFFD1D5DB))),
+              const SizedBox(height: 14),
+              PrimaryButton(
+                  label: 'See services & prices',
+                  onPressed: () => context.go('/services')),
+            ]),
           ),
         ],
       ),
     );
   }
 
-  MarkdownStyleSheet _mdStyle(BuildContext context) {
+  MarkdownStyleSheet _mdStyle() {
+    final p = AppText.body
+        .copyWith(color: const Color(0xFF374151), fontSize: 16, height: 1.7);
     return MarkdownStyleSheet(
-      h1: const TextStyle(
-          color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800,
-          height: 1.3),
-      h2: const TextStyle(
-          color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700,
-          height: 1.3),
-      h3: const TextStyle(
-          color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600,
-          height: 1.3),
-      p: const TextStyle(
-          color: Color(0xFFD1D5DB), fontSize: 15, height: 1.7),
-      strong: const TextStyle(
-          color: Colors.white, fontWeight: FontWeight.w700),
-      em: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
-      a: const TextStyle(
-          color: kGreen400,
-          decoration: TextDecoration.underline,
-          decorationColor: kGreen400),
-      listBullet: const TextStyle(color: kGreen400),
-      listIndent: 20,
+      h1: AppText.h1,
+      h2: AppText.h2,
+      h3: AppText.h3,
+      p: p,
+      listBullet: p.copyWith(color: AppColors.primary),
+      strong: p.copyWith(color: AppColors.text, fontWeight: FontWeight.w700),
+      em: p.copyWith(fontStyle: FontStyle.italic),
+      a: p.copyWith(
+          color: AppColors.primary, decoration: TextDecoration.underline),
+      blockquote: p.copyWith(color: AppColors.primaryDk, fontSize: 15),
       blockquoteDecoration: BoxDecoration(
-        color: kGreen400.withAlpha(13),
-        border: const Border(
-            left: BorderSide(color: kGreen400, width: 3)),
-        borderRadius: BorderRadius.circular(4),
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border:
+            const Border(left: BorderSide(color: AppColors.primary, width: 3)),
       ),
       blockquotePadding: const EdgeInsets.all(14),
-      blockquote: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
-      code: const TextStyle(
-          color: kGreen400,
-          backgroundColor: Color(0xFF1C2326),
-          fontSize: 13),
+      code: AppText.small.copyWith(backgroundColor: AppColors.surfaceAlt),
       codeblockDecoration: BoxDecoration(
-        color: kBgCard2,
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       horizontalRuleDecoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: kGray700, width: 0.5)),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       h1Padding: const EdgeInsets.only(top: 24, bottom: 8),
       h2Padding: const EdgeInsets.only(top: 22, bottom: 8),
