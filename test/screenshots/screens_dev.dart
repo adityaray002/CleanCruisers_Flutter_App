@@ -115,6 +115,9 @@ void main() {
       prefs: profile);
   both('service', const ServiceDetailScreen(serviceId: 'wash-full'), 2000,
       prefs: profile);
+  both('service_detailing',
+      const ServiceDetailScreen(serviceId: 'rubbing-wax-exterior'), 2000,
+      prefs: profile);
   // Booking page: car + address come from the profile.
   both('book', const BookingFlowScreen(serviceId: 'wash-full'), 1700,
       prefs: profile);
