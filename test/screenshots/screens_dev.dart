@@ -110,6 +110,9 @@ void main() {
   both('home_new', const HomeScreen(), 2400);
   both('home_repeat', const HomeScreen(), 2400, prefs: repeatPrefs());
   both('services', const ServicesScreen(), 1600, prefs: profile);
+  both('services_detailing',
+      const ServicesScreen(initialCategory: ServiceCategory.detailing), 2000,
+      prefs: profile);
   both('service', const ServiceDetailScreen(serviceId: 'wash-full'), 2000,
       prefs: profile);
   // Booking page: car + address come from the profile.

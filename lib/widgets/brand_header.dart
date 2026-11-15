@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/pricing.dart';
 import '../core/theme.dart';
 import '../models/address.dart';
 import '../providers/app_providers.dart';
@@ -43,6 +44,49 @@ class BrandWithAddress extends StatelessWidget {
   }
 }
 
+/// "🚗 Hatchback ⌄": the car whose prices the app shows. Opens the car
+/// sheet. Shows the saved model ("Swift") when there is one.
+class CarPill extends ConsumerWidget {
+  const CarPill({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(profileProvider);
+    final model = p.carModel.trim();
+    final label = model.isNotEmpty
+        ? model.split(' ').last
+        : (p.car == null ? 'Your car' : carTypeNames[p.car]!);
+    return Semantics(
+      button: true,
+      label: p.car == null
+          ? 'Choose your car to see exact prices'
+          : 'Prices for ${carTypeNames[p.car]}. Change car',
+      child: ExcludeSemantics(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 130, minHeight: 44),
+          child: RoundSurface(
+            onTap: () => showCarSheet(context, ref),
+            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.directions_car_outlined,
+                  size: 18, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.smallStrong.copyWith(color: AppColors.text)),
+              ),
+              const Icon(Icons.keyboard_arrow_down_rounded,
+                  size: 18, color: AppColors.textMuted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// White pill or circle with a hairline border (header chips).
 class RoundSurface extends StatelessWidget {
   final Widget child;
@@ -78,13 +122,55 @@ class RoundSurface extends StatelessWidget {
 /// heading. Tap to pick another address. With no address yet it reads
 /// "Set your car's location" in green, as a call to action.
 class ParkedAtLine extends ConsumerWidget {
-  const ParkedAtLine({super.key});
+  /// Home header style: a small "Car parked at" line above, and the place
+  /// in bold ("Home, Janakpuri").
+  final bool withOverline;
+  const ParkedAtLine({super.key, this.withOverline = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sel = ref.watch(addressBookProvider).selected;
     final place = sel == null ? null : addressLabelNames[sel.label]!;
     final color = sel == null ? AppColors.primary : AppColors.textMuted;
+    if (withOverline) {
+      final short =
+          sel == null ? 'Set your location' : '$place · ${sel.address}';
+      return Semantics(
+        button: true,
+        label: sel == null
+            ? 'Set where your car is parked'
+            : 'Car parked at $place, ${sel.address}. Change',
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: () => showAddressSheet(context, ref),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Car parked at', style: AppText.caption),
+                    Row(children: [
+                      Flexible(
+                        child: Text(short,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.bodyStrong.copyWith(
+                                color: sel == null
+                                    ? AppColors.primary
+                                    : AppColors.text,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                      const Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 18, color: AppColors.primary),
+                    ]),
+                  ]),
+            ),
+          ),
+        ),
+      );
+    }
     return Semantics(
       button: true,
       label: sel == null

@@ -9,6 +9,16 @@ const serviceCategoryNames = {
   ServiceCategory.monthly: 'Monthly Plan',
 };
 
+/// The "What's bothering you?" chips on the Detailing page.
+enum DetailNeed { shine, scratches, inside, everything }
+
+const detailNeedNames = {
+  DetailNeed.shine: 'Dull paint',
+  DetailNeed.scratches: 'Light scratches',
+  DetailNeed.inside: 'Stains or smell',
+  DetailNeed.everything: 'Everything',
+};
+
 class Extra {
   final String id, name;
   final int price;
@@ -44,6 +54,18 @@ class CarService {
   final String? _summary;
   String get summary => _summary ?? tagline;
 
+  /// Plain name for lists and the package page ("Outside only"). Bookings
+  /// and the ops desk keep the full [name].
+  final String? _listName;
+  String get listName => _listName ?? name;
+
+  /// Detailing: what the package fixes, in the customer's words
+  /// ("light scratches and faded paint"). Shown as "Fixes: …".
+  final String? fixes;
+
+  /// Detailing: which "What's bothering you?" chips show this package.
+  final Set<DetailNeed> needs;
+
   const CarService({
     required this.id,
     required this.category,
@@ -60,10 +82,14 @@ class CarService {
     this.notIncluded = const [],
     this.badge,
     this.priceSuffix = '',
+    this.fixes,
+    this.needs = const {},
     List<String>? highlights,
     String? summary,
+    String? listName,
   })  : _highlights = highlights,
-        _summary = summary;
+        _summary = summary,
+        _listName = listName;
 
   /// Whether the photo already shows our logo (uniform, bag, bucket). Photos
   /// without it get a small logo badge so every service image is branded.
@@ -121,6 +147,7 @@ final serviceCatalog = <CarService>[
   // ── Car wash ────────────────────────────────────────────────────────────────
   CarService(
     id: 'wash-full',
+    listName: 'Full wash',
     category: ServiceCategory.wash,
     name: 'Exterior + Interior Wash',
     tagline: 'Foam wash outside, vacuum and polish inside.',
@@ -147,6 +174,7 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'wash-exterior',
+    listName: 'Outside only',
     category: ServiceCategory.wash,
     name: 'Exterior Wash',
     tagline: 'Foam wash, wheels and tyre polish.',
@@ -168,6 +196,7 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'wash-interior',
+    listName: 'Inside only',
     category: ServiceCategory.wash,
     name: 'Interior Clean',
     tagline: 'Vacuum, dashboard polish and footmats.',
@@ -192,6 +221,7 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'wash-bucket',
+    listName: 'Quick bucket wash',
     category: ServiceCategory.wash,
     name: 'Bucket Wash',
     tagline: 'Quick hand wash and wipe-down, no pressure washer.',
@@ -215,6 +245,8 @@ final serviceCatalog = <CarService>[
   // ── Detailing ───────────────────────────────────────────────────────────────
   CarService(
     id: 'dry-cleaning',
+    fixes: 'stained seats, roof and mats, bad smell',
+    needs: const {DetailNeed.inside},
     category: ServiceCategory.detailing,
     name: 'Interior Dry Cleaning',
     tagline: 'Deep shampoo of seats, roof, doors and mats.',
@@ -230,6 +262,8 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: '3m-wax-exterior',
+    fixes: 'dull paint, adds gloss and protection',
+    needs: const {DetailNeed.shine},
     category: ServiceCategory.detailing,
     name: '3M Wax + Foam Wash',
     tagline: 'Glossy shine and paint protection.',
@@ -244,6 +278,8 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'rubbing-exterior',
+    fixes: 'light scratches and faded paint',
+    needs: const {DetailNeed.scratches},
     category: ServiceCategory.detailing,
     name: 'Rubbing + Foam Wash',
     tagline: 'Machine rubbing for light scratches and dullness.',
@@ -258,6 +294,9 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'rubbing-wax-exterior',
+    fixes: 'scratches, then seals the shine',
+    needs: const {DetailNeed.scratches, DetailNeed.shine},
+    badge: 'Best finish',
     category: ServiceCategory.detailing,
     name: 'Rubbing + 3M Wax',
     tagline: 'Restore the paint, then seal it with wax.',
@@ -272,6 +311,8 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'dryclean-wax-exterior',
+    fixes: 'a tired cabin and dull paint together',
+    needs: const {DetailNeed.inside, DetailNeed.shine},
     category: ServiceCategory.detailing,
     name: 'Dry Cleaning + 3M Wax',
     tagline: 'Deep-cleaned cabin and a waxed exterior.',
@@ -286,6 +327,8 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'rubbing-dryclean-exterior',
+    fixes: 'faded paint and a dirty cabin',
+    needs: const {DetailNeed.scratches, DetailNeed.inside},
     category: ServiceCategory.detailing,
     name: 'Rubbing + Dry Cleaning',
     tagline: 'Paint rubbing plus a full interior dry clean.',
@@ -300,6 +343,13 @@ final serviceCatalog = <CarService>[
   ),
   CarService(
     id: 'full-package',
+    fixes: 'everything: rubbing, 3M wax and dry clean',
+    needs: const {
+      DetailNeed.everything,
+      DetailNeed.shine,
+      DetailNeed.scratches,
+      DetailNeed.inside
+    },
     category: ServiceCategory.detailing,
     name: 'Full Detailing Package',
     tagline: 'Rubbing, 3M wax and interior dry clean.',

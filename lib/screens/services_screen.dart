@@ -8,19 +8,19 @@ import '../core/theme.dart';
 import '../data/business_info.dart';
 import '../models/service.dart';
 import '../providers/app_providers.dart';
-import '../widgets/book_button.dart';
 import '../widgets/brand_header.dart';
-import '../widgets/trust_widgets.dart';
+import '../widgets/contact_actions.dart';
 import '../widgets/ui.dart';
 
-/// Packages of one category (wash, detailing or monthly; set by `?cat=`).
-/// Top to bottom:
-/// 1. back, category name, where the car is parked,
-/// 2. trust pills (facts from business_info.dart only),
-/// 3. car type, each with its lowest price (prices below follow it),
-/// 4. the featured package as a photo card with "Book now",
-/// 5. the other packages as compact rows, so they fit above the fold,
-/// 6. "Compare what each package includes", help.
+/// Packages of one category (wash, detailing or monthly; set by `?cat=`),
+/// v3 design. Top to bottom:
+/// 1. back, category name, "at your door · pay after the service",
+/// 2. car size (every price below follows it),
+/// 3. detailing only: "What's bothering you?" chips that filter the list,
+/// 4. the packages as selectable cards; each has its own "What's included"
+///    link to the package page,
+/// 5. a tip row (extras for washes, WhatsApp help for detailing),
+/// and a bar pinned to the bottom with the chosen price and "Pick a time".
 class ServicesScreen extends ConsumerStatefulWidget {
   final ServiceCategory? initialCategory;
   const ServicesScreen({super.key, this.initialCategory});
@@ -31,6 +31,8 @@ class ServicesScreen extends ConsumerStatefulWidget {
 
 class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   late CarType _car;
+  DetailNeed? _need; // null = show all
+  String? _picked;
 
   static const _gutter = AppSpace.lg;
 
@@ -42,11 +44,21 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
     _car = ref.read(profileProvider).car ?? CarType.hatchback;
   }
 
+  List<CarService> get _shown => servicesIn(_cat)
+      .where((s) => _need == null || s.needs.contains(_need))
+      .toList();
+
+  CarService _chosen(List<CarService> shown) =>
+      shown.where((s) => s.id == _picked).firstOrNull ??
+      shown
+          .where((s) => s.badge != null && _cat == ServiceCategory.wash)
+          .firstOrNull ??
+      shown.first;
+
   @override
   Widget build(BuildContext context) {
-    final services = servicesIn(_cat);
-    final featured = services.where((s) => s.badge != null).toList();
-    final others = services.where((s) => s.badge == null).toList();
+    final shown = _shown;
+    final chosen = _chosen(shown);
     const pad = EdgeInsets.symmetric(horizontal: _gutter);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -54,6 +66,17 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
           .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
         backgroundColor: AppColors.bg,
+        bottomNavigationBar: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.15,
+          child: _PickBar(
+            service: chosen,
+            car: _car,
+            onPick: () {
+              HapticFeedback.selectionClick();
+              context.push('/book/${chosen.id}?car=${_car.name}');
+            },
+          ),
+        ),
         body: MediaQuery.withClampedTextScaling(
           maxScaleFactor: 1.15,
           child: SafeArea(
@@ -63,7 +86,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      _gutter, AppSpace.sm, _gutter, AppSpace.md),
+                      _gutter, AppSpace.sm, _gutter, AppSpace.lg),
                   child: Row(children: [
                     Semantics(
                       button: true,
@@ -71,9 +94,9 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                       child: ExcludeSemantics(
                         child: RoundSurface(
                           onTap: () => context.go('/home'),
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(11),
                           child: const Icon(Icons.arrow_back_rounded,
-                              size: 22, color: AppColors.text),
+                              size: 20, color: AppColors.text),
                         ),
                       ),
                     ),
@@ -89,88 +112,104 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                                   overflow: TextOverflow.ellipsis,
                                   style: AppText.h2),
                             ),
-                            const ParkedAtLine(),
+                            Text(
+                                kPayAfterService
+                                    ? 'At your door · pay after the service'
+                                    : 'At your door',
+                                style: AppText.small),
                           ]),
                     ),
                   ]),
                 ),
-                const Padding(padding: pad, child: _TrustPills()),
-                const SizedBox(height: AppSpace.lg),
                 Padding(
                   padding: pad,
-                  child: Text('Your car type', style: AppText.title),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Padding(
-                  padding: pad,
-                  child: _CarTypeSelector(
+                  child: _CarSegments(
                     selected: _car,
-                    services: services,
                     onChanged: (c) {
                       HapticFeedback.selectionClick();
                       setState(() => _car = c);
                     },
                   ),
                 ),
-                const SizedBox(height: AppSpace.lg),
-                for (final s in featured)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        _gutter, 0, _gutter, AppSpace.lg),
-                    child: _PackageCard(
-                      service: s,
-                      car: _car,
-                      onTap: () => context.push('/service/${s.id}'),
-                    ),
-                  ),
-                if (others.isNotEmpty) ...[
+                if (_cat == ServiceCategory.detailing) ...[
+                  const SizedBox(height: AppSpace.xl),
                   Padding(
                     padding: pad,
-                    child: Text(featured.isEmpty ? 'Packages' : 'More packages',
-                        style: AppText.title),
+                    child: Text('What\'s bothering you?', style: AppText.title),
                   ),
                   const SizedBox(height: AppSpace.sm),
                   Padding(
                     padding: pad,
-                    child: AppCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(children: [
-                        for (var i = 0; i < others.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          _PackageRow(
-                            service: others[i],
-                            car: _car,
-                            onTap: () =>
-                                context.push('/service/${others[i].id}'),
+                    child: Wrap(
+                        spacing: AppSpace.sm,
+                        runSpacing: AppSpace.sm,
+                        children: [
+                          _NeedChip(
+                            label: 'Show all',
+                            on: _need == null,
+                            onTap: () => setState(() => _need = null),
                           ),
-                        ],
-                      ]),
-                    ),
+                          for (final n in DetailNeed.values)
+                            _NeedChip(
+                              label: detailNeedNames[n]!,
+                              on: _need == n,
+                              onTap: () => setState(() => _need = n),
+                            ),
+                        ]),
+                  ),
+                ] else ...[
+                  const SizedBox(height: AppSpace.xl),
+                  Padding(
+                    padding: pad,
+                    child: Row(children: [
+                      Expanded(
+                          child: Text(
+                              _cat == ServiceCategory.monthly
+                                  ? 'Choose a plan'
+                                  : 'Choose a wash',
+                              style: AppText.title)),
+                      Text('Prices for your ${carTypeNames[_car]}',
+                          style: AppText.caption),
+                    ]),
                   ),
                 ],
-                const SizedBox(height: AppSpace.sm),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: () => _showIncluded(context, services),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      textStyle: AppText.smallStrong,
-                      minimumSize: const Size(0, 44),
+                const SizedBox(height: AppSpace.md),
+                for (final s in shown)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        _gutter, 0, _gutter, AppSpace.md),
+                    child: _PackageOption(
+                      service: s,
+                      car: _car,
+                      selected: s.id == chosen.id,
+                      onSelect: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _picked = s.id);
+                      },
                     ),
-                    icon: const Icon(Icons.checklist_rounded, size: 18),
-                    label: const Text('Compare what each package includes'),
                   ),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Padding(
-                  padding: pad,
-                  child: HelpCard(
-                    title: 'Need a custom service?',
-                    line: 'Chat with our team',
-                    message: 'Hi CleanCruisers, I need help choosing a '
-                        'service for my ${carTypeNames[_car]}.',
+                if (_cat == ServiceCategory.wash)
+                  Padding(
+                    padding: pad,
+                    child: _TipRow(
+                      icon: Icons.add_rounded,
+                      title: 'Add seat or roof cleaning',
+                      line: 'Choose extras on the next step, '
+                          'from ${rupees(washAddonPrices['seat']!)}',
+                    ),
                   ),
-                ),
+                if (_cat == ServiceCategory.detailing)
+                  Padding(
+                    padding: pad,
+                    child: _TipRow(
+                      icon: Icons.chat_outlined,
+                      title: 'Not sure which one?',
+                      line: 'Send us a photo on WhatsApp',
+                      onTap: () => openWhatsApp(context,
+                          message: 'Hi CleanCruisers, which detailing package '
+                              'does my ${carTypeNames[_car]} need?'),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -178,116 +217,257 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       ),
     );
   }
+}
 
-  /// Each package and everything it includes, in one sheet.
-  void _showIncluded(BuildContext context, List<CarService> services) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.92,
-        builder: (_, scroll) => ListView(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(
-              AppSpace.page, 0, AppSpace.page, AppSpace.section),
-          children: [
-            Text('What\'s included', style: AppText.h3),
-            const SizedBox(height: AppSpace.lg),
-            for (final s in services) ...[
-              Text(s.name, style: AppText.title),
-              const SizedBox(height: AppSpace.sm),
-              for (final item in s.included) CheckItem(item),
-              const SizedBox(height: AppSpace.md),
-            ],
-          ],
+// ── Car size: a segmented control ────────────────────────────────────────────
+class _CarSegments extends StatelessWidget {
+  final CarType selected;
+  final ValueChanged<CarType> onChanged;
+  const _CarSegments({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE9ECEF),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(children: [
+        for (final t in CarType.values)
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: t == selected,
+              label: carTypeNames[t],
+              child: ExcludeSemantics(
+                child: GestureDetector(
+                  onTap: () => onChanged(t),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: t == selected ? AppColors.surface : null,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      boxShadow: t == selected
+                          ? const [
+                              BoxShadow(
+                                  color: Color(0x290B0F10),
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1))
+                            ]
+                          : null,
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(carTypeNames[t]!,
+                            maxLines: 1,
+                            style: AppText.smallStrong.copyWith(
+                                color: t == selected
+                                    ? AppColors.text
+                                    : AppColors.textMuted)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+class _NeedChip extends StatelessWidget {
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+  const _NeedChip({required this.label, required this.on, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: on,
+      label: label,
+      child: ExcludeSemantics(
+        child: Material(
+          color: on ? AppColors.ink : AppColors.surface,
+          shape: StadiumBorder(
+              side: BorderSide(color: on ? AppColors.ink : AppColors.border)),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 40),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(label,
+                      style: AppText.smallStrong
+                          .copyWith(color: on ? Colors.white : AppColors.text)),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Trust pills: facts from business_info.dart only ──────────────────────────
-class _TrustPills extends StatelessWidget {
-  const _TrustPills();
+// ── Package option ───────────────────────────────────────────────────────────
+/// A selectable card: photo, name and badge, what it does or fixes, how long
+/// it takes, this car's price and a radio. Underneath, a separate
+/// "What's included" row opens the package page.
+class _PackageOption extends StatelessWidget {
+  final CarService service;
+  final CarType car;
+  final bool selected;
+  final VoidCallback onSelect;
+  const _PackageOption({
+    required this.service,
+    required this.car,
+    required this.selected,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return const Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
-      if (kRatingValue != null && kRatingSource != null)
-        Pill('$kRatingValue on $kRatingSource',
-            icon: Icons.star_rounded, tone: PillTone.brand),
-      if (kPayAfterService)
-        Pill('Pay after service',
-            icon: Icons.payments_outlined, tone: PillTone.brand),
-      Pill('$kDaysLabel, $kHoursLabel', icon: Icons.schedule_rounded),
-      if (kEstablished != null) Pill('Since $kEstablished'),
-    ]);
-  }
-}
+    final s = service;
+    final price = '${rupees(s.priceFor(car))}${s.priceSuffix}';
+    final line = s.fixes != null ? 'Fixes: ${s.fixes}' : s.summary;
+    final photo = s.cardPhoto;
+    final r = BorderRadius.circular(AppRadius.lg);
 
-// ── Car type: prices below follow it ─────────────────────────────────────────
-/// Each tile shows the lowest price in this category for that car, so the
-/// customer sees what they will pay before tapping.
-class _CarTypeSelector extends StatelessWidget {
-  final CarType selected;
-  final List<CarService> services;
-  final ValueChanged<CarType> onChanged;
-  const _CarTypeSelector(
-      {required this.selected,
-      required this.services,
-      required this.onChanged});
-
-  int? _fromPrice(CarType t) {
-    final prices = services.map((s) => s.priceFor(t)).where((p) => p > 0);
-    return prices.isEmpty ? null : prices.reduce((a, b) => a < b ? a : b);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      for (final t in CarType.values) ...[
-        if (t != CarType.values.first) const SizedBox(width: AppSpace.sm),
-        Expanded(child: _tile(t)),
-      ],
-    ]);
-  }
-
-  Widget _tile(CarType t) {
-    final on = t == selected;
-    final from = _fromPrice(t);
-    return Semantics(
-      button: true,
-      selected: on,
-      label: '${carTypeNames[t]}'
-          '${from == null ? '' : ', from ${rupees(from)}'}',
-      child: ExcludeSemantics(
-        child: AppCard(
-          selected: on,
-          onTap: () => onChanged(t),
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSpace.xs, vertical: 10),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: r,
+        border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 2 : 1),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.16),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8))
+              ]
+            : null,
+      ),
+      child: ClipRRect(
+        borderRadius: r,
+        child: Material(
+          type: MaterialType.transparency,
           child: Column(children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(carTypeNames[t]!,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: (on ? AppText.smallStrong : AppText.small).copyWith(
-                      color: on ? AppColors.primaryDk : AppColors.text)),
-            ),
-            if (from != null) ...[
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text('from ${rupees(from)}',
-                    maxLines: 1,
-                    softWrap: false,
-                    style: AppText.caption.copyWith(
-                        color: on ? AppColors.primary : AppColors.textSubtle)),
+            Semantics(
+              button: true,
+              selected: selected,
+              label: '${s.listName}${s.badge != null ? ', ${s.badge}' : ''}. '
+                  '$line. Takes ${s.duration}. $price for a ${carTypeNames[car]}',
+              child: ExcludeSemantics(
+                child: InkWell(
+                  onTap: onSelect,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    child: Row(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.thumb),
+                        child: SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: photo != null
+                              ? Image.asset(photo,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 240,
+                                  excludeFromSemantics: true)
+                              : ColoredBox(
+                                  color: AppColors.primarySoft,
+                                  child: Icon(s.icon,
+                                      color: AppColors.primary, size: 28),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Text(s.listName, style: AppText.title),
+                                    if (s.badge != null)
+                                      Pill(s.badge!,
+                                          tone:
+                                              s.category == ServiceCategory.wash
+                                                  ? PillTone.solid
+                                                  : PillTone.dark),
+                                  ]),
+                              const SizedBox(height: 2),
+                              Text(line,
+                                  style: (s.fixes != null
+                                          ? AppText.small.copyWith(
+                                              color: AppColors.primaryDk,
+                                              fontWeight: FontWeight.w600)
+                                          : AppText.small)
+                                      .copyWith(height: 1.3)),
+                              const SizedBox(height: 2),
+                              Text(s.duration, style: AppText.caption),
+                            ]),
+                      ),
+                      const SizedBox(width: AppSpace.sm),
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(price,
+                                style: AppText.bodyStrong
+                                    .copyWith(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: AppSpace.sm),
+                            _Radio(on: selected),
+                          ]),
+                    ]),
+                  ),
+                ),
               ),
-            ],
+            ),
+            const Divider(height: 1),
+            Semantics(
+              button: true,
+              label: 'What\'s included in ${s.listName}',
+              child: ExcludeSemantics(
+                child: InkWell(
+                  onTap: () => context.push('/service/${s.id}'),
+                  child: SizedBox(
+                    height: 44,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: AppSpace.md),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text('What\'s included',
+                              style: AppText.smallStrong
+                                  .copyWith(color: AppColors.primary)),
+                        ),
+                        const Icon(Icons.chevron_right_rounded,
+                            size: 18, color: AppColors.primary),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ]),
         ),
       ),
@@ -295,229 +475,109 @@ class _CarTypeSelector extends StatelessWidget {
   }
 }
 
-// ── Package card ─────────────────────────────────────────────────────────────
-/// Photo across the top (badge and duration sit on it), then the name and a
-/// short summary, the highlights, and a footer with the price and "Book now".
-/// The whole card opens the package page. Only the featured package gets a
-/// filled button and a green border, so it is the one that stands out.
-class _PackageCard extends StatelessWidget {
-  final CarService service;
-  final CarType car;
-  final VoidCallback onTap;
-  const _PackageCard(
-      {required this.service, required this.car, required this.onTap});
+class _Radio extends StatelessWidget {
+  final bool on;
+  const _Radio({required this.on});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 22,
+        height: 22,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: on ? AppColors.primary : null,
+          border: Border.all(
+              color: on ? AppColors.primary : const Color(0xFFB9C2BC),
+              width: 2),
+        ),
+        child: on
+            ? Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                    color: Colors.white, shape: BoxShape.circle),
+              )
+            : null,
+      );
+}
+
+class _TipRow extends StatelessWidget {
+  final IconData icon;
+  final String title, line;
+  final VoidCallback? onTap;
+  const _TipRow(
+      {required this.icon,
+      required this.title,
+      required this.line,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final s = service;
-    final featured = s.badge != null;
-    final amount = rupees(s.priceFor(car));
-    const top = Radius.circular(AppRadius.lg - 1);
-
     return Semantics(
-      button: true,
-      label: '${s.name}${featured ? ', ${s.badge}' : ''}. ${s.summary}. '
-          'Takes ${s.duration}. ${s.highlights.join(', ')}. '
-          '$amount${s.priceSuffix} for a ${carTypeNames[car]}. '
-          'Tap to know more',
-      child: AppCard(
-        onTap: onTap,
-        radius: AppRadius.lg,
-        selected: featured,
-        color: AppColors.surface,
-        padding: EdgeInsets.zero,
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          // Photo, with the badge and duration on it.
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: top),
-            child: AspectRatio(
-              aspectRatio: 2.8,
-              child: Stack(fit: StackFit.expand, children: [
-                s.cardPhoto != null
-                    ? Image.asset(s.cardPhoto!,
-                        fit: BoxFit.cover,
-                        cacheWidth: 900,
-                        excludeFromSemantics: true)
-                    : ColoredBox(
-                        color: AppColors.primarySoft,
-                        child: Icon(s.icon, color: AppColors.primary, size: 40),
-                      ),
-                // Soft shade at the bottom so the duration pill reads.
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: [0.55, 1],
-                      colors: [Colors.transparent, Color(0x66000000)],
-                    ),
-                  ),
-                ),
-                if (featured)
-                  Positioned(
-                    top: AppSpace.md,
-                    left: AppSpace.md,
-                    child: ExcludeSemantics(
-                      child: Pill(s.badge!,
-                          icon: Icons.star_rounded, tone: PillTone.solid),
-                    ),
-                  ),
-                Positioned(
-                  left: AppSpace.md,
-                  bottom: AppSpace.md,
-                  child: ExcludeSemantics(
-                    child: Pill(s.duration,
-                        icon: Icons.schedule_rounded, tone: PillTone.dark),
-                  ),
-                ),
-              ]),
-            ),
-          ),
-          ExcludeSemantics(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpace.lg, 14, AppSpace.lg, AppSpace.xs),
+      button: onTap != null,
+      label: '$title. $line',
+      child: ExcludeSemantics(
+        child: AppCard(
+          onTap: onTap,
+          padding: const EdgeInsets.all(AppSpace.md),
+          child: Row(children: [
+            IconBadge(icon, size: 40),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(s.name, style: AppText.h3),
-                    const SizedBox(height: AppSpace.sm),
-                    // Highlights, two to a row.
-                    LayoutBuilder(builder: (context, c) {
-                      final w = (c.maxWidth - AppSpace.md) / 2;
-                      return Wrap(
-                          spacing: AppSpace.md,
-                          runSpacing: 6,
-                          children: [
-                            for (final h in s.highlights)
-                              SizedBox(width: w, child: _Tick(h)),
-                          ]);
-                    }),
+                    Text(title, style: AppText.title),
+                    Text(line, style: AppText.small),
                   ]),
             ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpace.lg, AppSpace.md, AppSpace.md, AppSpace.md),
-            child: Row(children: [
-              Expanded(
-                child: ExcludeSemantics(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('$amount${s.priceSuffix}',
-                            style: AppText.priceSm
-                                .copyWith(color: AppColors.text)),
-                        Text(
-                            'for ${carTypeNames[car]}'
-                            '${kPayAfterService ? ' · pay after service' : ''}',
-                            style: AppText.caption
-                                .copyWith(fontWeight: FontWeight.w500)),
-                      ]),
-                ),
-              ),
-              const SizedBox(width: AppSpace.sm),
-              BookButton(s, primary: featured),
-            ]),
-          ),
-        ]),
+            if (onTap != null)
+              const Icon(Icons.chevron_right_rounded,
+                  size: 22, color: AppColors.textSubtle),
+          ]),
+        ),
       ),
     );
   }
 }
 
-// ── Compact package row ──────────────────────────────────────────────────────
-/// Thumbnail, name, duration and two highlights, and this car's price. The
-/// whole row opens the package page (one tap target, no separate button).
-class _PackageRow extends StatelessWidget {
+// ── Bottom bar: chosen price and "Pick a time" ───────────────────────────────
+class _PickBar extends StatelessWidget {
   final CarService service;
   final CarType car;
-  final VoidCallback onTap;
-  const _PackageRow(
-      {required this.service, required this.car, required this.onTap});
+  final VoidCallback onPick;
+  const _PickBar(
+      {required this.service, required this.car, required this.onPick});
 
   @override
   Widget build(BuildContext context) {
     final s = service;
-    final amount = rupees(s.priceFor(car));
-    final photo = s.cardPhoto;
-    return Semantics(
-      button: true,
-      label: '${s.name}. Takes ${s.duration}. '
-          '${s.highlights.take(2).join(', ')}. '
-          '$amount${s.priceSuffix} for a ${carTypeNames[car]}. '
-          'Tap to know more',
-      child: ExcludeSemantics(
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpace.md, AppSpace.md, AppSpace.sm, AppSpace.md),
-            child: Row(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.thumb),
-                child: SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: photo != null
-                      ? Image.asset(photo,
-                          fit: BoxFit.cover,
-                          cacheWidth: 200,
-                          excludeFromSemantics: true)
-                      : ColoredBox(
-                          color: AppColors.primarySoft,
-                          child:
-                              Icon(s.icon, color: AppColors.primary, size: 24),
-                        ),
-                ),
-              ),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s.name, style: AppText.title),
-                      const SizedBox(height: 2),
-                      Text([s.duration, ...s.highlights.take(2)].join(' · '),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.small),
-                    ]),
-              ),
-              const SizedBox(width: AppSpace.sm),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(amount,
-                    style: AppText.bodyStrong.copyWith(color: AppColors.text)),
-                if (s.priceSuffix.isNotEmpty)
-                  Text(s.priceSuffix.trim(), style: AppText.caption),
+    return BottomActionBar(
+      child: Row(children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 150),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${rupees(s.priceFor(car))}${s.priceSuffix}',
+                    style: AppText.price.copyWith(fontSize: 22)),
+                Text('${s.listName} · ${carTypeNames[car]}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption),
               ]),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 22, color: AppColors.textSubtle),
-            ]),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: PrimaryButton(
+            label: 'Pick a time',
+            icon: Icons.arrow_forward_rounded,
+            onPressed: onPick,
           ),
         ),
-      ),
+      ]),
     );
   }
-}
-
-class _Tick extends StatelessWidget {
-  final String text;
-  const _Tick(this.text);
-
-  @override
-  Widget build(BuildContext context) =>
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 1),
-          child: Icon(Icons.check_rounded, size: 16, color: AppColors.primary),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-            child: Text(text,
-                style: AppText.small.copyWith(color: AppColors.text))),
-      ]);
 }
