@@ -497,7 +497,7 @@ At CleanCruisers, we believe car cleaning should fit into your life, not disrupt
 
 Our trained professionals bring all equipment to your doorstep. Whether it is a quick exterior wash or a full interior deep clean, we handle it while you stay comfortable at home.
 
-No advance payment is required. Services available 7 days a week, from 7 AM to 8 PM.
+No advance payment is required. Services are available 7 days a week, from 8 AM to 6 PM.
 
 Book from the app in under 2 minutes.
 ''',

@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
-import '../data/business_info.dart';
+import '../models/booking.dart';
 import '../providers/app_providers.dart';
-import '../widgets/contact_actions.dart';
-import '../widgets/motion.dart';
+import '../widgets/booking_progress.dart';
 import '../widgets/ui.dart';
 
+/// Shown right after a booking request is sent. It is a *request*: the team
+/// still confirms the slot, so this screen says exactly that and shows the
+/// tracker, instead of claiming the slot is already locked.
 class BookingSentScreen extends ConsumerStatefulWidget {
   final String bookingRef;
   const BookingSentScreen({super.key, required this.bookingRef});
@@ -38,7 +40,15 @@ class _BookingSentScreenState extends ConsumerState<BookingSentScreen>
 
   @override
   Widget build(BuildContext context) {
-    final b = ref.watch(bookingsProvider.notifier).byRef(widget.bookingRef);
+    final b = ref
+            .watch(myBookingsProvider)
+            .where((x) => x.ref == widget.bookingRef)
+            .firstOrNull ??
+        ref.watch(bookingsProvider.notifier).byRef(widget.bookingRef);
+    final confirmed = b != null &&
+        (progressIndex(b.status) ?? 0) >= 1 &&
+        b.status != BookingStatus.rescheduleNeeded;
+
     final scale = CurvedAnimation(
         parent: _anim,
         curve: const Interval(0, 0.7, curve: Curves.easeOutBack));
@@ -53,102 +63,117 @@ class _BookingSentScreenState extends ConsumerState<BookingSentScreen>
       child: Scaffold(
         backgroundColor: AppColors.surface,
         body: SafeArea(
-          child: Stack(children: [
-            ListView(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpace.page, 40, AppSpace.page, 24),
-              children: [
-                Center(
-                  child: ScaleTransition(
-                    scale: scale,
-                    child: Container(
-                      width: 92,
-                      height: 92,
-                      decoration: const BoxDecoration(
-                          color: AppColors.primarySoft, shape: BoxShape.circle),
-                      child: const Icon(Icons.check_rounded,
-                          size: 54, color: AppColors.primary),
-                    ),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpace.page, 40, AppSpace.page, AppSpace.xxl),
+            children: [
+              Center(
+                child: ScaleTransition(
+                  scale: scale,
+                  child: Container(
+                    width: 88,
+                    height: 88,
+                    decoration: const BoxDecoration(
+                        color: AppColors.primarySoft, shape: BoxShape.circle),
+                    child: Icon(
+                        confirmed
+                            ? Icons.check_circle_rounded
+                            : Icons.schedule_send_rounded,
+                        size: 46,
+                        color: AppColors.primary),
                   ),
                 ),
-                const SizedBox(height: 22),
-                FadeTransition(
-                  opacity: fade,
-                  child: Column(children: [
-                    Text('Booking request sent',
-                        style: AppText.h1, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    Text(
-                      'We\'ll confirm your slot on WhatsApp, usually within $kConfirmWithin.',
-                      style: AppText.body,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    if (b != null)
-                      AppCard(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: [
-                                Text('BOOKING REF', style: AppText.overline),
-                                const Spacer(),
-                                Pill(b.ref, tone: PillTone.brand),
-                              ]),
-                              const SizedBox(height: 10),
-                              const Divider(),
-                              InfoRow(
-                                  icon: Icons.local_car_wash_outlined,
-                                  label: 'Service',
-                                  value: b.serviceName),
-                              InfoRow(
-                                  icon: Icons.calendar_today_outlined,
-                                  label: 'When',
-                                  value:
-                                      '${friendlyDate(b.date)}\n${b.slotLabel}'),
-                              InfoRow(
-                                  icon: Icons.payments_outlined,
-                                  label: kPayAfterService
-                                      ? 'Pay after service'
-                                      : 'Estimated total',
-                                  value: rupees(b.total)),
-                            ]),
+              ),
+              const SizedBox(height: AppSpace.xl),
+              FadeTransition(
+                opacity: fade,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(confirmed ? 'Slot confirmed!' : 'Request sent!',
+                          textAlign: TextAlign.center, style: AppText.h1),
+                      const SizedBox(height: AppSpace.sm),
+                      Text(
+                          confirmed
+                              ? 'See you then.'
+                              : 'We\'ll confirm your slot in the app.\n'
+                                  'Watch it here or under Bookings.',
+                          textAlign: TextAlign.center,
+                          style: AppText.body),
+                      if (b != null) ...[
+                        const SizedBox(height: AppSpace.xxl),
+                        AppCard(child: BookingProgress(status: b.status)),
+                        const SizedBox(height: AppSpace.md),
+                        _Summary(booking: b),
+                      ],
+                      const SizedBox(height: AppSpace.xxl),
+                      PrimaryButton(
+                        label: 'Track booking',
+                        icon: Icons.event_note_rounded,
+                        onPressed: () => context
+                            .go(b == null ? '/bookings' : '/bookings/${b.ref}'),
                       ),
-                    const SizedBox(height: 16),
-                    const NoticeBox(
-                      icon: Icons.info_outline_rounded,
-                      warning: true,
-                      text:
-                          'Didn\'t press Send in WhatsApp? Your booking only reaches us once the message is sent.',
-                    ),
-                    if (b != null)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: () => openWhatsApp(context,
-                              message: b.whatsAppMessage()),
-                          icon: const Icon(Icons.refresh_rounded, size: 18),
-                          label: const Text('Open WhatsApp again'),
-                        ),
+                      const SizedBox(height: AppSpace.sm),
+                      TextButton(
+                        onPressed: () => context.go('/home'),
+                        child: const Text('Back to Home'),
                       ),
-                    const SizedBox(height: 20),
-                    PrimaryButton(
-                      label: 'View my bookings',
-                      onPressed: () => context.go('/bookings'),
-                    ),
-                    const SizedBox(height: 10),
-                    SecondaryButton(
-                        label: 'Back to home',
-                        onPressed: () => context.go('/home')),
-                  ]),
-                ),
-              ],
-            ),
-            // Brief celebration, centred on the check mark.
-            const Positioned(
-                top: 0, left: 0, right: 0, height: 172, child: ConfettiBurst()),
-          ]),
+                    ]),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// What was requested, one icon per line.
+class _Summary extends StatelessWidget {
+  final BookingRecord booking;
+  const _Summary({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final extras = [
+      for (final (name, qty, _) in b.extras) qty > 1 ? '$name × $qty' : name,
+    ];
+    final rows = [
+      (Icons.local_car_wash_rounded, [b.serviceName, ...extras].join(' + ')),
+      (Icons.directions_car_rounded, b.carLabel),
+      (
+        Icons.schedule_rounded,
+        '${friendlyDate(b.date)} · ${slotById(b.slotId)?.short ?? b.slotLabel}'
+      ),
+      (Icons.location_on_rounded, b.address),
+      (
+        Icons.payments_rounded,
+        '${rupees(b.payable)} · pay after the wash'
+            '${b.couponCode == null ? '' : ' (${b.couponCode} applied)'}'
+      ),
+    ];
+    return AppCard(
+      child: Column(children: [
+        for (final (icon, text) in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(icon, size: 18, color: AppColors.primary),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text(text,
+                    style: AppText.small.copyWith(color: AppColors.text)),
+              ),
+            ]),
+          ),
+        const Divider(height: AppSpace.lg),
+        Row(children: [
+          Text('Booking ID', style: AppText.caption),
+          const Spacer(),
+          SelectableText(b.ref, style: AppText.smallStrong),
+        ]),
+      ]),
     );
   }
 }

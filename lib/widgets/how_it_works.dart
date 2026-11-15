@@ -9,8 +9,8 @@ class HowItWorksSteps extends StatelessWidget {
     ('Pick a service & car size', 'See the exact price before you book.'),
     ('Choose a date and time', '$kHoursLabel, $kDaysLabel.'),
     (
-      'Send the booking on WhatsApp',
-      'We confirm your slot within $kConfirmWithin.'
+      'Request a booking in the app',
+      'Track the request and confirmation here.'
     ),
     (
       'We clean your car at your door',

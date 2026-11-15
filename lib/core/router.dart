@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../data/booking_cloud.dart';
 import '../models/service.dart';
+import '../providers/app_providers.dart';
+import '../screens/auth/login_screen.dart';
 import '../screens/blog_detail_screen.dart';
 import '../screens/blog_list_screen.dart';
 import '../screens/booking/booking_flow_screen.dart';
@@ -10,19 +14,75 @@ import '../screens/booking_sent_screen.dart';
 import '../screens/bookings_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/main_shell.dart';
+import '../screens/ops/ops_dashboard_screen.dart';
+import '../screens/ops/ops_login_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/service_detail_screen.dart';
 import '../screens/services_screen.dart';
 import '../screens/splash_screen.dart';
+import '../screens/wallet_screen.dart';
 import '../widgets/ui.dart';
 import 'pricing.dart';
 
 NoTransitionPage<void> _tab(Widget child) => NoTransitionPage(child: child);
 
+/// Re-runs the router's redirect whenever the signed-in user changes.
+class _AuthRefresh extends ChangeNotifier {
+  late final StreamSubscription<Object?> _sub;
+  _AuthRefresh(Stream<Object?> stream) {
+    _sub = stream.listen((_) => notifyListeners());
+  }
+
+  /// Something else the redirect depends on changed (the saved profile).
+  void ping() => notifyListeners();
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
+
+/// Customers log in with a phone OTP, then give their name, car and address
+/// once (so bookings never ask for them). The staff desk
+/// (/ops) has its own email login. Builds without Firebase configured can't
+/// send OTPs, so they skip the gate (booking then fails closed).
+String? authRedirect(
+  String path, {
+  required bool configured,
+  required bool signedIn,
+  required bool hasName,
+  bool hasSetup = true,
+}) {
+  if (path == '/') return '/home';
+  if (path == '/splash' || path.startsWith('/ops') || !configured) return null;
+  final onLogin = path.startsWith('/login');
+  const onboarding = {'/login/name', '/login/address'};
+  if (!signedIn) {
+    return onLogin && !onboarding.contains(path) ? null : '/login';
+  }
+  if (!hasName) return path == '/login/name' ? null : '/login/name';
+  if (!hasSetup) return path == '/login/address' ? null : '/login/address';
+  return onLogin ? '/home' : null;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
+  final cloud = ref.watch(bookingCloudProvider);
+  final refresh = _AuthRefresh(cloud.userChanges());
+  ref.onDispose(refresh.dispose);
+  ref.listen(profileProvider.select((p) => p.ready), (_, __) => refresh.ping());
+  ref.listen(setupSkippedProvider, (_, __) => refresh.ping());
   return GoRouter(
     initialLocation: '/splash',
-    redirect: (context, state) => state.uri.path == '/' ? '/home' : null,
+    refreshListenable: refresh,
+    redirect: (context, state) => authRedirect(
+      state.uri.path,
+      configured: cloud.configured,
+      signedIn: cloud.customerSignedIn,
+      hasName: cloud.customerName != null,
+      hasSetup:
+          ref.read(profileProvider).ready || ref.read(setupSkippedProvider),
+    ),
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(),
       body: Center(
@@ -39,6 +99,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     ),
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/login/otp',
+        redirect: (_, s) => s.extra is OtpSession ? null : '/login',
+        builder: (_, s) => OtpScreen(session: s.extra! as OtpSession),
+      ),
+      GoRoute(path: '/login/name', builder: (_, __) => const NameScreen()),
+      GoRoute(
+          path: '/login/address', builder: (_, __) => const AddressScreen()),
+      GoRoute(path: '/ops/login', builder: (_, __) => const OpsLoginScreen()),
+      GoRoute(path: '/ops', builder: (_, __) => const OpsDashboardScreen()),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),
         routes: [
@@ -59,6 +130,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/bookings',
               pageBuilder: (_, __) => _tab(const BookingsScreen())),
+          // CleanCredit: credit balance + offers (coupons).
+          GoRoute(
+              path: '/wallet',
+              pageBuilder: (_, __) => _tab(const WalletScreen())),
           GoRoute(
               path: '/profile',
               pageBuilder: (_, __) => _tab(const ProfileScreen())),

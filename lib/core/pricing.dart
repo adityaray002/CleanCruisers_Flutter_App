@@ -62,7 +62,7 @@ const Map<WashPackage, List<String>> washPackageInclusions = {
     'Exterior + interior black part polish',
     'Footmat cleaning',
     'Dashboard polish',
-    'Dicky vacuuming',
+    'Boot / Trunk vacuuming',
   ],
   WashPackage.exteriorOnly: [
     'Foam wash & high-pressure wash',
@@ -76,7 +76,7 @@ const Map<WashPackage, List<String>> washPackageInclusions = {
     'Footmat cleaning',
     'Dashboard polish',
     'Seats vacuuming',
-    'Dicky vacuuming',
+    'Boot / Trunk vacuuming',
   ],
   WashPackage.bucket: bucketWashInclusions,
 };
@@ -323,7 +323,7 @@ const completeCareInclusions = [
   'Interior Cleaning + Vacuum',
   'Interior Black Part Polish',
   'Exterior Foam Wash',
-  'Dicky Cleaning',
+  'Boot / Trunk Cleaning',
   'Tyre Polishing',
   'Exterior Black Part Polish',
   'Footmat Cleaning',

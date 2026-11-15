@@ -7,7 +7,9 @@ import '../core/theme.dart';
 import '../data/business_info.dart';
 import '../models/service.dart';
 import '../providers/app_providers.dart';
+import 'auth/login_screen.dart' show CarTypePicker;
 import '../widgets/contact_actions.dart';
+import '../widgets/customer_sheets.dart';
 import '../widgets/how_it_works.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/ui.dart';
@@ -22,14 +24,7 @@ class ServiceDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
-  CarType? _car;
   bool _showAllIncluded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _car = ref.read(profileProvider).car;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +48,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
 
     final included =
         _showAllIncluded ? s.included : s.included.take(6).toList();
+    // The customer's own car (saved at sign-up) decides the price.
+    final car = ref.watch(profileProvider).car;
 
     return Scaffold(
       body: CustomScrollView(slivers: [
@@ -87,25 +84,51 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                   style: AppText.overline),
               const SizedBox(height: 6),
               Text(s.name, style: AppText.h1),
+              if (car != null) ...[
+                const SizedBox(height: AppSpace.sm),
+                Row(children: [
+                  PriceText(s.priceFor(car), suffix: s.priceSuffix, size: 26),
+                  const SizedBox(width: AppSpace.sm),
+                  Icon(CarTypePicker.icons[car],
+                      size: 18, color: AppColors.primary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(carTypeNames[car]!,
+                        style: AppText.smallStrong
+                            .copyWith(color: AppColors.primaryDk),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  TextButton(
+                    onPressed: () => showCarSheet(context, ref),
+                    child: const Text('Change car'),
+                  ),
+                ]),
+              ],
               const SizedBox(height: 8),
               Text(s.description, style: AppText.body),
               const SizedBox(height: 14),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 Pill(s.duration, icon: Icons.schedule_rounded),
                 const Pill('At your doorstep', icon: Icons.home_outlined),
+                const Pill('Water tap & plug needed',
+                    icon: Icons.electrical_services_rounded,
+                    tone: PillTone.brand),
                 if (kPayAfterService)
                   const Pill('Pay after service',
-                      icon: Icons.payments_outlined, tone: PillTone.brand),
+                      icon: Icons.payments_outlined),
               ]),
-              _sectionTitle('Price for your car'),
-              Text('Tap your car size to see the exact price.',
-                  style: AppText.small),
-              const SizedBox(height: 12),
-              _CarPriceGrid(
-                service: s,
-                selected: _car,
-                onSelect: (c) => setState(() => _car = c),
-              ),
+              // Only when we don't know the car yet.
+              if (car == null) ...[
+                _sectionTitle('Pick your car'),
+                _CarPriceGrid(
+                  service: s,
+                  selected: null,
+                  onSelect: (c) => ref
+                      .read(profileProvider.notifier)
+                      .save(ref.read(profileProvider).copyWith(car: c)),
+                ),
+              ],
               _sectionTitle('What\'s included'),
               AppCard(
                 child: Column(
@@ -136,34 +159,44 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       ]),
                 ),
               ],
+              _sectionTitle('What we need from you'),
+              const AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _RequirementRow(
+                      icon: Icons.water_drop_rounded,
+                      title: 'Standard Water Tap Connection',
+                      description:
+                          'A normal running water tap within 25–30 meters of your vehicle. We carry tap adapters.',
+                    ),
+                    Divider(height: 18, color: AppColors.border),
+                    _RequirementRow(
+                      icon: Icons.electrical_services_rounded,
+                      title: 'Standard Power Socket',
+                      description:
+                          'A standard 5A or 15A plug point within 25–30 meters for our pressure washer & vacuum.',
+                    ),
+                    Divider(height: 18, color: AppColors.border),
+                    _RequirementRow(
+                      icon: Icons.cable_rounded,
+                      title: 'We Bring Everything Else',
+                      description:
+                          '30-meter industrial extension cables, water hose, pressure washer, vacuum, and detailing supplies.',
+                    ),
+                  ],
+                ),
+              ),
               _sectionTitle('Best for'),
               Text(s.bestFor,
                   style: AppText.body.copyWith(color: AppColors.text)),
               if (s.extras.isNotEmpty) ...[
-                _sectionTitle('Optional extras'),
-                Text('You can add these while booking.', style: AppText.small),
-                const SizedBox(height: 10),
-                AppCard(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Column(children: [
-                    for (var i = 0; i < s.extras.length; i++) ...[
-                      if (i > 0) const Divider(),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(children: [
-                          Expanded(
-                              child:
-                                  Text(s.extras[i].name, style: AppText.body)),
-                          Text(
-                              '+${rupees(s.extras[i].price)}'
-                              '${s.extras[i].unit != null ? ' / ${s.extras[i].unit}' : ''}',
-                              style: AppText.smallStrong),
-                        ]),
-                      ),
-                    ],
-                  ]),
-                ),
+                _sectionTitle('Add-ons at checkout'),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final e in s.extras)
+                    Pill('${e.name} +${rupees(e.price)}',
+                        icon: Icons.add_rounded),
+                ]),
               ],
               _sectionTitle('How it works'),
               const AppCard(child: HowItWorksSteps()),
@@ -198,14 +231,14 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                  _car != null
-                      ? 'For ${carTypeNames[_car]}'
+                  car != null
+                      ? 'For ${carTypeNames[car]}'
                       : s.samePriceForAll
                           ? 'Price'
-                          : 'Starts at',
+                          : 'From',
                   style: AppText.caption),
               PriceText(
-                _car == null ? s.fromPrice : s.priceFor(_car!),
+                car == null ? s.fromPrice : s.priceFor(car),
                 suffix: s.priceSuffix,
               ),
             ],
@@ -213,9 +246,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
           const SizedBox(width: 16),
           Expanded(
             child: PrimaryButton(
-              label: 'Book this service',
-              onPressed: () => context.push(
-                  '/book/${s.id}${_car == null ? '' : '?car=${_car!.name}'}'),
+              label: 'Book',
+              icon: Icons.event_available_rounded,
+              onPressed: () => context.push('/book/${s.id}'),
             ),
           ),
         ]),
@@ -284,8 +317,7 @@ class _Faqs extends StatelessWidget {
     final faqs = [
       (
         'How is my booking confirmed?',
-        'After you send the booking, WhatsApp opens with your details filled in. '
-            'Our team replies to confirm the slot, usually within $kConfirmWithin.'
+        'Send a request in the app. Our team checks the route, service time and worker availability, then confirms the appointment in the app.'
       ),
       if (kPayAfterService)
         (
@@ -304,7 +336,7 @@ class _Faqs extends StatelessWidget {
       ),
       (
         'Can I change the date or time?',
-        'Yes. Message us on WhatsApp or call before your slot and we\'ll find a new time.'
+        'Yes. Request a change from My bookings. Our team will review it and update the status in the app.'
       ),
       (
         'Which areas do you cover?',
@@ -319,8 +351,7 @@ class _Faqs extends StatelessWidget {
           for (var i = 0; i < faqs.length; i++) ...[
             if (i > 0) const Divider(indent: 16, endIndent: 16),
             ExpansionTile(
-              title: Text(faqs[i].$1,
-                  style: AppText.bodyStrong.copyWith(fontSize: 14.5)),
+              title: Text(faqs[i].$1, style: AppText.bodyStrong),
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               expandedCrossAxisAlignment: CrossAxisAlignment.start,
               iconColor: AppColors.primary,
@@ -330,6 +361,44 @@ class _Faqs extends StatelessWidget {
           ],
         ]),
       ),
+    );
+  }
+}
+
+class _RequirementRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  const _RequirementRow(
+      {required this.icon, required this.title, required this.description});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: const BoxDecoration(
+            color: AppColors.primarySoft,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppText.smallStrong),
+              const SizedBox(height: 2),
+              Text(description,
+                  style: AppText.caption
+                      .copyWith(color: AppColors.text, height: 1.35)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

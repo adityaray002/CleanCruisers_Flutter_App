@@ -3,12 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/constants.dart';
+import '../core/format.dart';
 import '../core/pricing.dart';
 import '../core/theme.dart';
 import '../data/business_info.dart';
 import '../models/booking.dart';
 import '../providers/app_providers.dart';
 import '../widgets/contact_actions.dart';
+import '../widgets/customer_sheets.dart';
 import '../widgets/ui.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -23,70 +25,10 @@ class ProfileScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpace.page, 4, AppSpace.page, 40),
         children: [
-          _title('Your details'),
-          AppCard(
-            child: p.isEmpty
-                ? Row(children: [
-                    const IconBadge(Icons.person_outline_rounded),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        'Your name, number, address and car are saved here after your first booking, '
-                        'so next time takes seconds.',
-                        style: AppText.small,
-                      ),
-                    ),
-                  ])
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                        if (p.name.isNotEmpty)
-                          InfoRow(
-                              icon: Icons.person_outline_rounded,
-                              label: 'Name',
-                              value: p.name),
-                        if (p.phone.isNotEmpty)
-                          InfoRow(
-                              icon: Icons.phone_outlined,
-                              label: 'Mobile',
-                              value: '+91 ${p.phone}'),
-                        if (p.address.isNotEmpty)
-                          InfoRow(
-                              icon: Icons.home_outlined,
-                              label: 'Address',
-                              value: p.address),
-                        if (p.car != null)
-                          InfoRow(
-                            icon: Icons.directions_car_outlined,
-                            label: 'Car',
-                            value: p.carModel.isEmpty
-                                ? carTypeNames[p.car]!
-                                : '${p.carModel} · ${carTypeNames[p.car]}',
-                          ),
-                        const SizedBox(height: 6),
-                        Row(children: [
-                          Expanded(
-                            child: SecondaryButton(
-                              label: 'Edit',
-                              icon: Icons.edit_outlined,
-                              dense: true,
-                              onPressed: () => _editProfile(context, ref, p),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                                foregroundColor: AppColors.textSubtle),
-                            onPressed: () async {
-                              await ref.read(profileProvider.notifier).clear();
-                              if (context.mounted) {
-                                showMessage(context, 'Saved details cleared.');
-                              }
-                            },
-                            child: const Text('Clear'),
-                          ),
-                        ]),
-                      ]),
+          const SizedBox(height: 8),
+          _ProfileHeader(
+            profile: p,
+            onEdit: () => _editProfile(context, ref, p),
           ),
           _title('Help & support'),
           AppCard(
@@ -99,15 +41,6 @@ class ProfileScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right_rounded,
                     color: AppColors.textSubtle),
                 onTap: () => openWhatsApp(context),
-              ),
-              const Divider(),
-              InfoRow(
-                icon: Icons.call_outlined,
-                label: 'Call · $kHoursLabel',
-                value: kPhoneDisplay,
-                trailing: const Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textSubtle),
-                onTap: () => callUs(context),
               ),
               const Divider(),
               InfoRow(
@@ -174,10 +107,6 @@ class ProfileScreen extends ConsumerWidget {
                   icon: Icons.schedule_rounded,
                   label: 'Service hours',
                   value: '$kHoursLabel · $kDaysLabel'),
-              const InfoRow(
-                  icon: Icons.business_outlined,
-                  label: 'Office',
-                  value: kAddress),
               const SizedBox(height: 6),
               const Wrap(spacing: 8, runSpacing: 8, children: [
                 _SocialChip('Instagram', kInstagram),
@@ -191,10 +120,25 @@ class ProfileScreen extends ConsumerWidget {
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final a in kServiceAreas) Pill(a, icon: Icons.place_outlined),
           ]),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
+          if (ref.watch(bookingCloudProvider).customerSignedIn)
+            SecondaryButton(
+              label: 'Log out',
+              icon: Icons.logout_rounded,
+              onPressed: () => _logout(context, ref),
+            ),
+          const SizedBox(height: 20),
           Center(
               child:
                   Text('CleanCruisers app · v1.0.0', style: AppText.caption)),
+          Center(
+            child: TextButton(
+              onPressed: () => context.push('/ops/login'),
+              style:
+                  TextButton.styleFrom(foregroundColor: AppColors.textSubtle),
+              child: const Text('Team sign in'),
+            ),
+          ),
         ],
       ),
     );
@@ -204,6 +148,28 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.only(top: 24, bottom: 10),
         child: Semantics(header: true, child: Text(t, style: AppText.h3)),
       );
+
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+            'Your bookings stay safe. Log in again with your mobile number to see them.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Stay')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Log out')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(profileProvider.notifier).clear();
+    await ref.read(bookingCloudProvider).signOutCustomer();
+  }
 
   Future<void> _editProfile(
       BuildContext context, WidgetRef ref, CustomerProfile p) async {
@@ -248,14 +214,13 @@ class _EditProfileSheet extends StatefulWidget {
 class _EditProfileSheetState extends State<_EditProfileSheet> {
   late final _name = TextEditingController(text: widget.initial.name);
   late final _phone = TextEditingController(text: widget.initial.phone);
-  late final _address = TextEditingController(text: widget.initial.address);
   late final _model = TextEditingController(text: widget.initial.carModel);
   late CarType? _car = widget.initial.car;
   bool _submitted = false;
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _address, _model]) {
+    for (final c in [_name, _phone, _model]) {
       c.dispose();
     }
     super.dispose();
@@ -295,13 +260,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                   : null,
             ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _address,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(labelText: 'Address'),
-          ),
           const SizedBox(height: 16),
           Text('Car size', style: AppText.smallStrong),
           const SizedBox(height: 8),
@@ -334,7 +292,8 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 CustomerProfile(
                   name: _name.text.trim(),
                   phone: _phone.text.trim(),
-                  address: _address.text.trim(),
+                  // Addresses are edited in "My addresses".
+                  address: widget.initial.address,
                   pin: widget.initial.pin,
                   car: _car,
                   carModel: _model.text.trim(),
@@ -345,5 +304,104 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
         ]),
       ),
     );
+  }
+}
+
+class _ProfileHeader extends ConsumerWidget {
+  final CustomerProfile profile;
+  final VoidCallback onEdit;
+  const _ProfileHeader({required this.profile, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cloud = ref.watch(bookingCloudProvider);
+    final name = cloud.customerName ?? profile.name;
+    final phone = cloud.verifiedPhone ?? profile.phone;
+    final p = profile;
+    return Column(children: [
+      AppCard(
+        color: AppColors.ink,
+        padding: const EdgeInsets.all(18),
+        child: Row(children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: AppColors.brand,
+            child: Text(
+                name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+                style: AppText.h1.copyWith(color: AppColors.ink)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name.trim().isEmpty ? 'Welcome' : name,
+                  style: AppText.h2.copyWith(color: Colors.white)),
+              if (phone.isNotEmpty)
+                Row(children: [
+                  Text(phoneLabel(phone),
+                      style: AppText.small.copyWith(color: Colors.white70)),
+                  if (cloud.verifiedPhone != null) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.verified_rounded,
+                        size: 15, color: AppColors.brand),
+                  ],
+                ]),
+            ]),
+          ),
+          IconButton(
+            tooltip: 'Edit details',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, color: Colors.white),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 10),
+      AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Column(children: [
+          InfoRow(
+            icon: Icons.directions_car_outlined,
+            label: 'My car',
+            value: p.car == null
+                ? 'Not added yet'
+                : p.carModel.isEmpty
+                    ? carTypeNames[p.car]!
+                    : '${p.carModel} · ${carTypeNames[p.car]}',
+            trailing: const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textSubtle),
+            onTap: onEdit,
+          ),
+          const Divider(),
+          InfoRow(
+            icon: Icons.location_on_outlined,
+            label: 'My addresses',
+            value: p.address.isEmpty ? 'Add an address' : p.address,
+            trailing: const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textSubtle),
+            onTap: () => showAddressSheet(context, ref),
+          ),
+          const Divider(),
+          InfoRow(
+            icon: Icons.event_note_outlined,
+            label: 'My bookings',
+            value: 'Track and manage',
+            trailing: const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textSubtle),
+            onTap: () => context.go('/bookings'),
+          ),
+          const Divider(),
+          Consumer(
+            builder: (context, ref, _) => InfoRow(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'CleanCredit & offers',
+              value: rupees(ref.watch(walletProvider).balance),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textSubtle),
+              onTap: () => context.go('/wallet'),
+            ),
+          ),
+        ]),
+      ),
+    ]);
   }
 }

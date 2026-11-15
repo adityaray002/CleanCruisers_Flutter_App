@@ -1,1039 +1,1101 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
 import '../core/pricing.dart';
+import '../core/scheduling.dart' show Coverage;
 import '../core/theme.dart';
 import '../data/business_info.dart';
+import '../data/offers.dart';
+import '../models/booking.dart';
 import '../models/service.dart';
+import '../widgets/booking_progress.dart';
+import '../widgets/brand_header.dart';
 import '../providers/app_providers.dart';
-import '../widgets/contact_actions.dart';
+import '../widgets/customer_sheets.dart';
 import '../widgets/motion.dart';
-import '../widgets/service_widgets.dart';
+import '../widgets/trust_widgets.dart';
 import '../widgets/ui.dart';
 
+/// Home. Top to bottom:
+/// 1. brand, where the car is parked, booking-updates bell,
+/// 2. the live booking, if any (first: it answers "when is the expert coming?"),
+/// 3. hero carousel + "Book a service" (compact while a booking is live),
+/// 4. new customers: offers right away (the first-booking offer leads),
+/// 5. "Book again" with the last completed booking, if any,
+/// 6. "What does your car need?" — wash and detailing tiles, side by side,
+/// 7. new customers: how it works,
+/// 8. monthly plan,
+/// 9. returning customers: offers,
+/// 10. before / after photo (only when kBeforeAfterPhoto is set),
+/// 11. why choose us (only facts set in business_info.dart),
+/// 12. eco promise (only when kEcoFriendly is confirmed),
+/// 13. help.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  /// Home's gutter is a little tighter than other screens' so the two-up
+  /// tiles get room on small phones.
+  static const _gutter = AppSpace.lg;
+
+  static EdgeInsets _section({double top = 0, double bottom = AppSpace.xxl}) =>
+      EdgeInsets.fromLTRB(_gutter, top, _gutter, bottom);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bookings = ref.watch(bookingsProvider);
-    final next = bookings.where((b) => b.isUpcoming()).toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-    // Offer one-tap rebooking of the most recent past booking.
-    final hiddenRef = ref.watch(hiddenRebookProvider);
-    final latest = next.isEmpty
-        ? bookings.where((b) => serviceById(b.serviceId) != null).firstOrNull
-        : null;
-    final last = latest?.ref == hiddenRef ? null : latest;
-
-    void hideRebook(String bookingRef) {
-      ref.read(hiddenRebookProvider.notifier).hide(bookingRef);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: const Text('Book again card hidden'),
-          action: SnackBarAction(
-              label: 'Undo',
-              onPressed: () =>
-                  ref.read(hiddenRebookProvider.notifier).unhide()),
-        ));
-    }
-
+    final bookings = ref.watch(myBookingsProvider);
     final car = ref.watch(profileProvider).car;
-
-    Widget padded(Widget child) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-        child: child);
+    final live = bookings.where((b) => !b.status.isFinal).firstOrNull;
+    final isNew = bookings.isEmpty;
+    final lastDone = (bookings
+            .where((b) =>
+                b.status == BookingStatus.completed &&
+                serviceById(b.serviceId) != null)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date)))
+        .firstOrNull;
+    // New customers see the first-booking offer in the hero, so the offers
+    // section below doesn't repeat it.
+    final firstOffer = isNew
+        ? kOffers
+            .where((o) =>
+                o.firstBookingOnly &&
+                (o.onlyFor == null ||
+                    (car != null && o.onlyFor!.contains(car))))
+            .firstOrNull
+        : null;
+    final offers = Padding(
+      padding: _section(),
+      child: _Offers(firstBooking: isNew, car: car, skip: firstOffer),
+    );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppTheme.overlayDark.copyWith(
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
-      ),
+      value: SystemUiOverlayStyle.dark
+          .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
-        body: CustomScrollView(slivers: [
-          SliverToBoxAdapter(
-            child: _Hero(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (next.isNotEmpty) ...[
-                      padded(_QuickCard(
-                        icon: Icons.event_available_rounded,
-                        overline: 'YOUR NEXT BOOKING',
-                        title: next.first.serviceName,
-                        subtitle:
-                            '${friendlyDate(next.first.date)} · ${next.first.slotLabel}',
-                        onTap: () =>
-                            context.push('/bookings/${next.first.ref}'),
-                      )),
-                      const SizedBox(height: 28),
-                    ] else if (last != null) ...[
-                      padded(Dismissible(
-                        key: ValueKey('rebook-${last.ref}'),
-                        onDismissed: (_) => hideRebook(last.ref),
-                        child: _QuickCard(
-                          icon: Icons.replay_rounded,
-                          overline: 'BOOK AGAIN',
-                          title: last.serviceName,
-                          subtitle:
-                              '${last.carLabel} · ${rupees(serviceById(last.serviceId)!.priceFor(last.car))}',
-                          onTap: () => context.push(
-                              '/book/${last.serviceId}?car=${last.car.name}'),
-                          onClose: () => hideRebook(last.ref),
-                        ),
-                      )),
-                      const SizedBox(height: 28),
-                    ],
-                    Reveal(child: _WashSection(car: car)),
-                    const SizedBox(height: 32),
-                    Reveal(child: _DetailingSection(car: car)),
-                    const SizedBox(height: 32),
-                    const Reveal(child: _PlanSection()),
-                    const SizedBox(height: 32),
-                    Reveal(child: padded(const _HelpCard())),
-                  ]),
+        backgroundColor: AppColors.bg,
+        // Dense cards: system text may grow, but only to 1.15x so the cards
+        // keep their shape on small phones.
+        body: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.15,
+          child: SafeArea(
+            bottom: false,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: AppSpace.sm),
+              children: [
+                Padding(
+                  padding: _section(top: AppSpace.sm, bottom: AppSpace.lg),
+                  child: _Header(hasUpdate: live != null),
+                ),
+                if (live != null)
+                  Padding(
+                    padding: _section(bottom: AppSpace.lg),
+                    child: _LiveBookingCard(booking: live),
+                  ),
+                Padding(
+                  padding: _section(bottom: AppSpace.xxl),
+                  child: _HeroCarousel(
+                      compact: live != null, firstOffer: firstOffer),
+                ),
+                if (lastDone != null)
+                  Padding(
+                    padding: _section(),
+                    child: _BookAgain(booking: lastDone),
+                  ),
+                Padding(
+                  padding: _section(),
+                  child: Reveal(child: _ServiceTiles(car: car)),
+                ),
+                if (isNew)
+                  Padding(
+                    padding: _section(),
+                    child: const _HowItWorks(),
+                  ),
+                if (isNew) offers,
+                Padding(
+                  padding: _section(),
+                  child: Reveal(child: _MonthlyCard(car: car)),
+                ),
+                if (!isNew) offers,
+                if (kBeforeAfterPhoto != null)
+                  Padding(
+                    padding: _section(),
+                    child: _BeforeAfter(photo: kBeforeAfterPhoto!),
+                  ),
+                Padding(padding: _section(), child: const WhyUsStrip()),
+                if (kEcoFriendly)
+                  Padding(padding: _section(), child: const _EcoBanner()),
+                Padding(padding: _section(), child: const HelpCard()),
+              ],
             ),
           ),
-          const SliverToBoxAdapter(child: _Tagline()),
-        ]),
+        ),
       ),
     );
   }
 }
 
-// ── Hero: carousel + content panel ────────────────────────────────────────────
-/// Full-bleed photo carousel; a rounded panel holding [child] slides over its
-/// bottom edge.
-class _Hero extends StatelessWidget {
-  final Widget child;
-  const _Hero({required this.child});
-
-  static const _overlap = 28.0;
+/// Section title (H2) + "View all →".
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final VoidCallback onViewAll;
+  const _SectionTitle(this.title, {required this.onViewAll});
 
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final photoH = (mq.size.height * 0.5).clamp(340.0, 440.0);
-
-    return Stack(children: [
-      SizedBox(
-        height: photoH,
-        child: const _Carousel(bottomInset: _overlap),
+    return Row(children: [
+      Expanded(
+        child: Semantics(header: true, child: Text(title, style: AppText.h3)),
       ),
-      Positioned(
-        top: mq.padding.top + 10,
-        left: AppSpace.page,
-        right: AppSpace.page,
-        child: const _TopBar(),
-      ),
-      Padding(
-        padding: EdgeInsets.only(top: photoH - _overlap),
-        child: Container(
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: AppColors.bg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(_overlap)),
-          ),
-          padding: const EdgeInsets.only(top: 24),
-          child: child,
+      const SizedBox(width: AppSpace.sm),
+      TextButton(
+        onPressed: onViewAll,
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          textStyle: AppText.bodyStrong,
+          minimumSize: const Size(0, 44),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
         ),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('View all'),
+          SizedBox(width: AppSpace.xs),
+          Icon(Icons.arrow_forward_rounded, size: 18),
+        ]),
       ),
     ]);
   }
 }
 
-/// A carousel slide: either a photo, or a designed brand banner (no photo)
-/// built around a large icon.
-class _Slide {
-  final String line1, line2, caption, route;
-  final String? image;
-  final IconData icon;
-  final Alignment align;
-  const _Slide(this.line1, this.line2, this.caption, this.route,
-      {this.image,
-      this.icon = Icons.local_car_wash_rounded,
-      this.align = Alignment.center});
-}
-
-class _Carousel extends StatefulWidget {
-  final double bottomInset;
-  const _Carousel({required this.bottomInset});
+// ── Header: brand, location chip, bell ───────────────────────────────────────
+class _Header extends ConsumerStatefulWidget {
+  /// A booking is in progress: the bell shows a dot and opens it.
+  final bool hasUpdate;
+  const _Header({required this.hasUpdate});
 
   @override
-  State<_Carousel> createState() => _CarouselState();
+  ConsumerState<_Header> createState() => _HeaderState();
 }
 
-class _CarouselState extends State<_Carousel> {
-  static const _interval = Duration(seconds: 4);
+class _HeaderState extends ConsumerState<_Header> {
+  /// Ask once per app launch, like delivery apps do, until an address exists.
+  static bool _askedThisLaunch = false;
 
-  late final List<_Slide> _slides = [
-    const _Slide('DOORSTEP', 'CAR WASH', 'Foam wash at your home or office',
-        '/services?cat=wash',
-        image: 'assets/images/hero_team_kit.jpg', align: Alignment(0, -0.3)),
-    const _Slide('SHOWROOM', 'SHINE', '3M wax & machine rubbing',
-        '/services?cat=detailing',
-        image: 'assets/images/wax_finish.jpg',
-        icon: Icons.auto_awesome_rounded,
-        align: Alignment(0, -0.1)),
-    _Slide(
-        '3 WASHES',
-        'A MONTH',
-        'Monthly plan · ${rupees(serviceById('monthly-3')!.fromPrice)}/month',
-        '/service/monthly-3',
-        image: 'assets/images/clean_suv.jpg',
-        icon: Icons.event_repeat_rounded,
-        align: const Alignment(0, -0.2)),
-    if (kPayAfterService)
-      const _Slide('PAY AFTER', 'THE SERVICE',
-          'No advance. Check your car first.', '/services',
-          image: 'assets/images/wheel_before_after.jpg',
-          icon: Icons.verified_user_rounded,
-          align: Alignment(0, 0.3)),
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _askedThisLaunch) return;
+      if (ref.read(addressBookProvider).items.isNotEmpty) return;
+      _askedThisLaunch = true;
+      showAddressSheet(context, ref);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sel = ref.watch(addressBookProvider).selected;
+    final areas = ref.watch(serviceAreasProvider).valueOrNull ?? const [];
+    final coverage = sel == null ? null : addressCoverage(sel, areas);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        const Expanded(child: BrandWithAddress()),
+        const SizedBox(width: AppSpace.sm),
+        Semantics(
+          button: true,
+          label: widget.hasUpdate
+              ? 'Booking updates. Your booking is in progress'
+              : 'Booking updates',
+          child: ExcludeSemantics(
+            child: RoundSurface(
+              onTap: () => context.go('/bookings'),
+              padding: const EdgeInsets.all(10),
+              child: Stack(clipBehavior: Clip.none, children: [
+                const Icon(Icons.notifications_none_rounded,
+                    size: 22, color: AppColors.text),
+                if (widget.hasUpdate)
+                  Positioned(
+                    top: 0,
+                    right: 1,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.elasticOut,
+                      builder: (_, v, child) =>
+                          Transform.scale(scale: v, child: child),
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: AppColors.surface, width: 1.5),
+                        ),
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
+          ),
+        ),
+      ]),
+      if (coverage == Coverage.notCovered) ...[
+        const SizedBox(height: AppSpace.md),
+        const NoticeBox(
+          icon: Icons.wrong_location_outlined,
+          warning: true,
+          text: 'We don\'t wash cars at this address yet. '
+              'Tap the address above to pick another.',
+        ),
+      ],
+    ]);
+  }
+}
+
+// ── Hero: photos slide behind a fixed headline ───────────────────────────────
+class _HeroCarousel extends StatefulWidget {
+  /// Shorter headline and padding, for when a live booking sits above it.
+  final bool compact;
+
+  /// New customers: the first-booking offer, as a tap-to-copy line.
+  final Offer? firstOffer;
+  const _HeroCarousel({this.compact = false, this.firstOffer});
+
+  static const photos = [
+    'assets/images/interior_vacuum.jpg',
+    'assets/images/foam_mitt_wash.jpg',
+    'assets/images/machine_polish.jpg',
   ];
 
-  // Start far into an endless list so it can loop in both directions.
-  late final _page = PageController(initialPage: _slides.length * 1000);
+  @override
+  State<_HeroCarousel> createState() => _HeroCarouselState();
+}
+
+class _HeroCarouselState extends State<_HeroCarousel> {
   Timer? _timer;
   int _index = 0;
+
+  void _go(int delta) {
+    final n = _HeroCarousel.photos.length;
+    setState(() => _index = (_index + delta + n) % n);
+  }
+
+  void _restartTimer() {
+    _timer?.cancel();
+    if (MediaQuery.of(context).disableAnimations) return;
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _go(1));
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _restart();
-  }
-
-  void _restart() {
-    _timer?.cancel();
-    if (reduceMotion(context)) return;
-    _timer = Timer.periodic(_interval, (_) {
-      if (_page.hasClients) {
-        _page.nextPage(
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOutCubic);
-      }
-    });
+    _restartTimer();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _page.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(fit: StackFit.expand, children: [
-      // Pause auto-advance while the user is swiping.
-      NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n is ScrollStartNotification && n.dragDetails != null) {
-            _timer?.cancel();
-          } else if (n is ScrollEndNotification) {
-            _restart();
-          }
-          return false;
-        },
-        child: PageView.builder(
-          controller: _page,
-          onPageChanged: (i) => setState(() => _index = i % _slides.length),
-          itemBuilder: (_, i) => _SlideView(_slides[i % _slides.length],
-              bottomInset: widget.bottomInset),
-        ),
-      ),
-      Positioned(
-        left: 0,
-        right: 0,
-        bottom: widget.bottomInset + 14,
-        child: IgnorePointer(
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            for (var i = 0; i < _slides.length; i++)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: i == _index ? 18 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: i == _index ? Colors.white : const Color(0x80FFFFFF),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
+    const photos = _HeroCarousel.photos;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Stack(children: [
+        const Positioned.fill(child: ColoredBox(color: AppColors.forest)),
+        const SizedBox(width: double.infinity),
+        // Photos fill only the right half, so the headline sits on solid green
+        // and never crosses a face.
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              heightFactor: 1,
+              child: ExcludeSemantics(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragEnd: (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    if (v.abs() < 200) return;
+                    _go(v < 0 ? 1 : -1);
+                    _restartTimer();
+                  },
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 700),
+                    // Stack the outgoing and incoming photo at full size.
+                    layoutBuilder: (current, previous) => Stack(
+                        fit: StackFit.expand,
+                        children: [...previous, if (current != null) current]),
+                    // Mirrored (the people face left in the originals) and
+                    // framed so each person sits at the right of the slot.
+                    child: Transform.flip(
+                      key: ValueKey(_index),
+                      flipX: true,
+                      child: Image.asset(photos[_index],
+                          fit: BoxFit.cover,
+                          alignment: const Alignment(-0.2, -0.2),
+                          cacheWidth: 800),
+                    ),
+                  ),
                 ),
               ),
-          ]),
-        ),
-      ),
-    ]);
-  }
-}
-
-class _SlideView extends StatelessWidget {
-  final _Slide slide;
-  final double bottomInset;
-  const _SlideView(this.slide, {required this.bottomInset});
-
-  @override
-  Widget build(BuildContext context) {
-    final headline = AppText.display.copyWith(
-        color: Colors.white, fontSize: 32, height: 1.0, letterSpacing: -0.5);
-    final image = slide.image;
-    // Big headline on a fixed-size banner: cap system text scaling so it
-    // never runs into the top bar.
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-          textScaler:
-              MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.1)),
-      child: GestureDetector(
-        onTap: () => context.go(slide.route),
-        child: Stack(fit: StackFit.expand, children: [
-          if (image != null)
-            ClipRect(
-              child: KenBurns(
-                child: Image.asset(image,
-                    fit: BoxFit.cover,
-                    alignment: slide.align,
-                    semanticLabel: '${slide.line1} ${slide.line2}'),
-              ),
-            )
-          else
-            _BannerArt(slide.icon, bottomInset: bottomInset),
-          // Dark behind the top bar and the headline; the middle stays clear.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                // Strong black from the bottom so the headline always reads.
-                stops: [0, 0.25, 0.4, 0.7, 1],
-                colors: [
-                  Color(0xA6000000),
-                  Color(0x00000000),
-                  Color(0x00000000),
-                  Color(0xB3000000),
-                  Color(0xF2000000),
-                ],
-              ),
             ),
           ),
-          Positioned(
-            left: AppSpace.page,
-            right: AppSpace.page,
-            bottom: bottomInset + 38,
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(slide.line1, style: headline),
-              Text(slide.line2,
-                  style: headline.copyWith(color: AppColors.brand)),
-              const SizedBox(height: 8),
-              Row(children: [
-                Flexible(
-                  child: Text(slide.caption,
-                      style: AppText.smallStrong.copyWith(color: Colors.white),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+        ),
+        // Blend the photo's left edge into the green.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  stops: const [0.5, 0.8],
+                  colors: [
+                    AppColors.forest,
+                    AppColors.forest.withValues(alpha: 0),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward_rounded,
-                    size: 16, color: Colors.white),
-              ]),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-/// Designed banner background: brand-dark gradient, a soft green glow and a
-/// large outlined icon on the right, above where the headline sits.
-class _BannerArt extends StatelessWidget {
-  final IconData icon;
-  final double bottomInset;
-  const _BannerArt(this.icon, {required this.bottomInset});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(fit: StackFit.expand, children: [
-      const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.ink, Color(0xFF0F3D24)],
-          ),
-        ),
-      ),
-      Positioned(
-        right: -60,
-        top: 40,
-        child: Container(
-          width: 280,
-          height: 280,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient:
-                RadialGradient(colors: [Color(0x551DE874), Color(0x001DE874)]),
-          ),
-        ),
-      ),
-      Positioned(
-        right: 24,
-        top: 0,
-        bottom: bottomInset + 40,
-        child: Center(
-          child: Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0x14FFFFFF),
-              border: Border.all(color: const Color(0x331DE874), width: 1.5),
-            ),
-            child: Icon(icon, size: 72, color: AppColors.brand),
-          ),
-        ),
-      ),
-    ]);
-  }
-}
-
-/// Location on the left, the customer's car (or a call button) on the right.
-class _TopBar extends ConsumerWidget {
-  const _TopBar();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(profileProvider);
-    final hasAddress = profile.address.trim().isNotEmpty;
-    final carLabel = profile.carModel.trim().isNotEmpty
-        ? profile.carModel.trim()
-        : profile.car == null
-            ? null
-            : carTypeNames[profile.car];
-
-    return Row(children: [
-      Expanded(
-        child: GestureDetector(
-          onTap: () => context.go('/profile'),
-          child: Row(children: [
-            if (hasAddress)
-              const Icon(Icons.location_on_rounded,
-                  color: Colors.white, size: 30)
-            else
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                    color: Colors.white, shape: BoxShape.circle),
-                child: ClipOval(
-                    child: Image.asset('assets/images/logo.png',
-                        width: 34, height: 34)),
               ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(hasAddress ? 'Home' : 'CleanCruisers',
-                        style: AppText.h3
-                            .copyWith(color: Colors.white, fontSize: 17),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    Text(
-                        hasAddress
-                            ? profile.address.trim()
-                            : 'Doorstep car care · $kCityLabel',
-                        style: AppText.caption.copyWith(color: Colors.white),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ]),
             ),
-          ]),
-        ),
-      ),
-      const SizedBox(width: 8),
-      _Chip(
-        icon: carLabel == null
-            ? Icons.call_rounded
-            : Icons.directions_car_filled_rounded,
-        label: carLabel ?? 'Call',
-        onTap: carLabel == null
-            ? () => callUs(context)
-            : () => context.go('/profile'),
-      ),
-    ]);
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _Chip({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 150),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 18, color: AppColors.primary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(label,
-                    style: AppText.smallStrong,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ]),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Sections ──────────────────────────────────────────────────────────────────
-/// Price for the customer's car when we know it, otherwise the starting price.
-Widget _price(CarService s, CarType? car, {double size = 16}) {
-  final exact = car != null || s.samePriceForAll;
-  return FittedBox(
-    fit: BoxFit.scaleDown,
-    alignment: Alignment.centerLeft,
-    child: Text.rich(TextSpan(children: [
-      if (!exact) TextSpan(text: 'Starts at ', style: AppText.caption),
-      TextSpan(
-          text: rupees(car != null ? s.priceFor(car) : s.fromPrice),
-          style: AppText.price.copyWith(fontSize: size)),
-      if (s.priceSuffix.isNotEmpty)
-        TextSpan(text: s.priceSuffix, style: AppText.caption),
-    ])),
-  );
-}
-
-/// Section heading: icon, title, one-line subtitle and an optional "See all".
-class _SectionTitle extends StatelessWidget {
-  final IconData icon;
-  final String title, subtitle;
-  final VoidCallback? onSeeAll;
-  const _SectionTitle(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      this.onSeeAll});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.page, 0, 8, 12),
-      child: Row(children: [
-        IconBadge(icon, size: 38),
-        const SizedBox(width: 12),
-        Expanded(
+        Padding(
+          padding: widget.compact
+              ? const EdgeInsets.fromLTRB(
+                  AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.lg)
+              : const EdgeInsets.fromLTRB(
+                  AppSpace.xl, AppSpace.xl, AppSpace.xl, AppSpace.xl),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Semantics(header: true, child: Text(title, style: AppText.h2)),
-            Text(subtitle,
-                style: AppText.small,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ]),
-        ),
-        if (onSeeAll != null)
-          TextButton(
-            onPressed: onSeeAll,
-            style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12)),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('See all'),
-              Icon(Icons.chevron_right_rounded, size: 18),
-            ]),
-          )
-        else
-          const SizedBox(width: 12),
-      ]),
-    );
-  }
-}
-
-/// Narrow tiles: cap very large system text so labels stay legible.
-Widget _capText(BuildContext context, Widget child) => MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-          textScaler:
-              MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.15)),
-      child: child,
-    );
-
-/// Horizontally scrolling row of [_ServiceCard]s.
-class _ServiceScroller extends StatelessWidget {
-  final List<String> ids;
-  final CarType? car;
-  const _ServiceScroller({required this.ids, required this.car});
-
-  @override
-  Widget build(BuildContext context) {
-    // Height comes from the content so cards never overflow.
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(AppSpace.page, 0, AppSpace.page, 8),
-      child: _capText(
-        context,
-        IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            for (var i = 0; i < ids.length; i++) ...[
-              if (i > 0) const SizedBox(width: 12),
-              _ServiceCard(service: serviceById(ids[i])!, car: car),
+            SizedBox(
+              width: widget.compact ? 190 : 250,
+              child: Semantics(
+                header: true,
+                child: Text(
+                    widget.compact
+                        ? 'A spotless car, right where it\'s parked'
+                        : 'A spotless car.\nRight where\nit\'s parked.',
+                    style: (widget.compact ? AppText.h3 : AppText.display)
+                        .copyWith(color: Colors.white)),
+              ),
+            ),
+            // One message under the headline: the first-booking offer when
+            // there is one (How it works also says "pay after"), otherwise
+            // "Pay after the service".
+            if (kPayAfterService &&
+                !widget.compact &&
+                widget.firstOffer == null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text('Pay after the service',
+                  style: AppText.bodyStrong.copyWith(color: AppColors.brand)),
             ],
+            if (widget.firstOffer != null && !widget.compact) ...[
+              const SizedBox(height: AppSpace.md),
+              _HeroOffer(widget.firstOffer!),
+            ],
+            SizedBox(height: widget.compact ? AppSpace.md : AppSpace.lg),
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                context.go('/services');
+              },
+              // Logo green on the dark hero (brand is for dark backgrounds).
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                foregroundColor: AppColors.ink,
+                minimumSize: Size(0, widget.compact ? 40 : 46),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('Book a service'),
+                SizedBox(width: AppSpace.sm),
+                Icon(Icons.arrow_forward_rounded, size: 20),
+              ]),
+            ),
           ]),
         ),
-      ),
+      ]),
     );
   }
 }
 
-// ── Car wash: horizontally scrolling cards ────────────────────────────────────
-class _WashSection extends StatelessWidget {
-  final CarType? car;
-  const _WashSection({required this.car});
-
-  static const _order = [
-    'wash-full',
-    'wash-exterior',
-    'wash-interior',
-    'wash-bucket',
-  ];
+/// "🏷 ₹100 off your first booking · FIRST100" on the dark hero. Tap to copy
+/// the code.
+class _HeroOffer extends StatelessWidget {
+  final Offer offer;
+  const _HeroOffer(this.offer);
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _SectionTitle(
-        icon: Icons.local_car_wash_rounded,
-        title: 'Car Wash',
-        subtitle: car == null
-            ? 'At your doorstep · 30 min – 2 hrs'
-            : 'Prices for your ${carTypeNames[car]}',
-        onSeeAll: () => context.go('/services?cat=wash'),
-      ),
-      _ServiceScroller(ids: _order, car: car),
-    ]);
-  }
-}
-
-// ── Detailing: horizontally scrolling cards ───────────────────────────────────
-class _DetailingSection extends StatelessWidget {
-  final CarType? car;
-  const _DetailingSection({required this.car});
-
-  static const _order = [
-    'full-package',
-    '3m-wax-exterior',
-    'rubbing-exterior',
-    'rubbing-wax-exterior',
-    'dry-cleaning',
-    'dryclean-wax-exterior',
-    'rubbing-dryclean-exterior',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _SectionTitle(
-        icon: Icons.auto_awesome_rounded,
-        title: 'Detailing & Polish',
-        subtitle: 'Shine & scratch removal',
-        onSeeAll: () => context.go('/services?cat=detailing'),
-      ),
-      _ServiceScroller(ids: _order, car: car),
-    ]);
-  }
-}
-
-class _ServiceCard extends StatelessWidget {
-  final CarService service;
-  final CarType? car;
-  const _ServiceCard({required this.service, required this.car});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 164,
-      child: AppCard(
-        onTap: () => context.push('/service/${service.id}'),
-        padding: EdgeInsets.zero,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Service photo; brand-dark icon art when there is no photo.
-          Container(
-            height: 100,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.ink, Color(0xFF0F3D24)],
-              ),
-            ),
-            child: Stack(fit: StackFit.expand, children: [
-              if (service.cardPhoto != null) ...[
-                Image.asset(service.cardPhoto!,
-                    fit: BoxFit.cover,
-                    cacheWidth: 500, // card is ~164dp wide; keep decode small
-                    excludeFromSemantics: true),
-                if (!service.cardPhotoHasLogo) const CornerBrandMark(),
-                // Darken the top so the badge stays readable on any photo.
-                if (service.badge != null)
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.center,
-                        colors: [Color(0x80000000), Color(0x00000000)],
-                      ),
-                    ),
-                  ),
-              ] else ...[
-                Positioned(
-                  right: -8,
-                  bottom: -12,
-                  child: Icon(service.icon,
-                      size: 72, color: const Color(0x261DE874)),
-                ),
-                Positioned(
-                  left: 12,
-                  bottom: 10,
-                  child: Icon(service.icon, size: 28, color: AppColors.brand),
-                ),
-              ],
-              if (service.badge != null)
-                Positioned(
-                  left: 12,
-                  top: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.brand,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(service.badge!.toUpperCase(),
-                        style: AppText.overline
-                            .copyWith(color: AppColors.ink, fontSize: 9)),
-                  ),
-                ),
-            ]),
-          ),
-          Expanded(
+    final off = offer.percentOff > 0
+        ? '${offer.percentOff}% off'
+        : '${rupees(offer.flatOff)} off';
+    return Semantics(
+      button: true,
+      label: '$off your first booking. Code ${offer.code}. Tap to copy',
+      child: ExcludeSemantics(
+        child: Material(
+          // Solid, so the code stays readable where the pill runs over the photo.
+          color: AppColors.forest,
+          shape: const StadiumBorder(
+              side: BorderSide(color: AppColors.brand, width: 1)),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: offer.code));
+              showMessage(context, 'Code ${offer.code} copied');
+            },
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(service.name,
-                        style: AppText.bodyStrong.copyWith(fontSize: 14),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      const Icon(Icons.schedule_rounded,
-                          size: 13, color: AppColors.textSubtle),
-                      const SizedBox(width: 4),
-                      Text(service.duration, style: AppText.caption),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.local_offer_outlined,
+                    size: 16, color: AppColors.brand),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: '$off your first booking · '),
+                      TextSpan(
+                          text: offer.code,
+                          style: const TextStyle(color: AppColors.brand)),
                     ]),
-                    const Spacer(),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Expanded(child: _price(service, car)),
-                      const SizedBox(width: 6),
-                      Container(
-                        width: 26,
-                        height: 26,
-                        decoration: const BoxDecoration(
-                            color: AppColors.primarySoft,
-                            shape: BoxShape.circle),
-                        child: const Icon(Icons.arrow_forward_rounded,
-                            size: 15, color: AppColors.primary),
-                      ),
-                    ]),
-                  ]),
+                    style: AppText.caption.copyWith(color: Colors.white),
+                  ),
+                ),
+              ]),
             ),
           ),
-        ]),
+        ),
       ),
     );
   }
 }
 
-// ── Monthly plan ──────────────────────────────────────────────────────────────
-class _PlanSection extends StatelessWidget {
-  const _PlanSection();
+// ── Service tiles: wash and detailing, side by side ──────────────────────────
+class _ServiceTiles extends StatelessWidget {
+  final CarType? car;
+  const _ServiceTiles({required this.car});
 
   @override
   Widget build(BuildContext context) {
+    int priceOf(CarService s) => car == null ? s.fromPrice : s.priceFor(car!);
+    int cheapestIn(ServiceCategory c) =>
+        servicesIn(c).map(priceOf).reduce((a, b) => a < b ? a : b);
+
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _SectionTitle(
-        icon: Icons.event_repeat_rounded,
-        title: 'Monthly Plan',
-        subtitle: 'A clean car all month, no re-booking',
-        onSeeAll: () => context.go('/services?cat=monthly'),
+      Semantics(
+        header: true,
+        child: Text('What does your car need?', style: AppText.h3),
       ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const _PromoBanner(),
-          const SizedBox(height: 10),
-          _BucketPlanCard(plan: serviceById('monthly-bucket')!),
+      const SizedBox(height: AppSpace.md),
+      IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(
+            child: _ServiceTile(
+              photo: 'assets/images/home_tile_wash.jpg',
+              title: 'Car Wash',
+              line: 'Foam wash, inside and out',
+              price: cheapestIn(ServiceCategory.wash),
+              onTap: () => context.go('/services?cat=wash'),
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: _ServiceTile(
+              photo: 'assets/images/home_tile_detailing.jpg',
+              title: 'Detailing & Polish',
+              line: 'Polish, 3M wax and dry clean',
+              price: cheapestIn(ServiceCategory.detailing),
+              onTap: () => context.go('/services?cat=detailing'),
+            ),
+          ),
         ]),
       ),
     ]);
   }
 }
 
-class _BucketPlanCard extends StatelessWidget {
-  final CarService plan;
-  const _BucketPlanCard({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      onTap: () => context.push('/service/${plan.id}'),
-      child: Row(children: [
-        IconBadge(plan.icon),
-        const SizedBox(width: 14),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('4 bucket washes a month', style: AppText.bodyStrong),
-            const SizedBox(height: 2),
-            Text(plan.tagline, style: AppText.small),
-            const SizedBox(height: 6),
-            _price(plan, null),
-          ]),
-        ),
-        const Icon(Icons.chevron_right_rounded, color: AppColors.textSubtle),
-      ]),
-    );
-  }
-}
-
-// ── Help ──────────────────────────────────────────────────────────────────────
-class _HelpCard extends StatelessWidget {
-  const _HelpCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const IconBadge(Icons.support_agent_rounded, size: 44),
-          const SizedBox(width: 14),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Not sure what to book?', style: AppText.h3),
-              const SizedBox(height: 2),
-              Text(
-                  'Tell us about your car and we\'ll suggest the right service.',
-                  style: AppText.small),
-            ]),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        Row(children: [
-          Expanded(
-            child: PrimaryButton(
-                label: 'Chat on WhatsApp',
-                icon: Icons.chat_rounded,
-                dense: true,
-                onPressed: () => openWhatsApp(context)),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 48,
-            height: 44,
-            child: Tooltip(
-              message: 'Call us',
-              child: OutlinedButton(
-                onPressed: () => callUs(context),
-                style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.zero, minimumSize: const Size(48, 44)),
-                child: const Icon(Icons.call_rounded,
-                    size: 20, color: AppColors.primary),
-              ),
-            ),
-          ),
-        ]),
-      ]),
-    );
-  }
-}
-
-// ── Next booking / book again ─────────────────────────────────────────────────
-class _QuickCard extends StatelessWidget {
-  final IconData icon;
-  final String overline, title, subtitle;
+/// Half-width tile: photo on top, then the title and the from-price.
+class _ServiceTile extends StatelessWidget {
+  final String photo, title, line;
+  final int price;
   final VoidCallback onTap;
-  final VoidCallback? onClose; // shows a ✕ that hides the card
-  const _QuickCard({
-    required this.icon,
-    required this.overline,
+
+  const _ServiceTile({
+    required this.photo,
     required this.title,
-    required this.subtitle,
+    required this.line,
+    required this.price,
     required this.onTap,
-    this.onClose,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      onTap: onTap,
-      padding: onClose == null
-          ? const EdgeInsets.all(AppSpace.lg)
-          : const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, 4, AppSpace.lg),
-      child: Row(children: [
-        IconBadge(icon),
-        const SizedBox(width: 14),
-        Expanded(
+    return Semantics(
+      button: true,
+      label: '$title. $line. From ${rupees(price)}',
+      child: ExcludeSemantics(
+        child: AppCard(
+          onTap: onTap,
+          padding: EdgeInsets.zero,
           child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(overline, style: AppText.overline),
-            const SizedBox(height: 3),
-            Text(title, style: AppText.bodyStrong),
-            Text(subtitle, style: AppText.small),
-          ]),
-        ),
-        if (onClose == null)
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textSubtle)
-        else
-          IconButton(
-            onPressed: onClose,
-            tooltip: 'Hide',
-            icon: const Icon(Icons.close_rounded,
-                size: 20, color: AppColors.textSubtle),
-          ),
-      ]),
-    );
-  }
-}
-
-// ── Promo banner ──────────────────────────────────────────────────────────────
-class _PromoBanner extends StatelessWidget {
-  const _PromoBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final plan = serviceById('monthly-3')!;
-    return PressScale(
-      child: GestureDetector(
-        onTap: () => context.push('/service/${plan.id}'),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.ink, Color(0xFF0F3D24)],
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppRadius.md - 1)),
+              child: AspectRatio(
+                aspectRatio: 1.6,
+                child: Image.asset(photo,
+                    fit: BoxFit.cover,
+                    cacheWidth: 500,
+                    excludeFromSemantics: true),
               ),
             ),
-            child: Stack(children: [
-              // Decorative icon art on the right.
-              const Positioned(
-                right: -18,
-                bottom: -22,
-                child: Icon(Icons.event_repeat_rounded,
-                    size: 150, color: Color(0x261DE874)),
-              ),
-              Positioned(
-                right: 18,
-                top: 18,
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0x14FFFFFF),
-                    border: Border.all(color: const Color(0x331DE874)),
-                  ),
-                  child: const Icon(Icons.local_car_wash_rounded,
-                      color: AppColors.brand, size: 26),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 84, 18),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.brand,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Text(
-                            (plan.badge ?? 'Monthly plan').toUpperCase(),
-                            style: AppText.overline
-                                .copyWith(color: AppColors.ink)),
-                      ),
-                      const SizedBox(height: 10),
-                      Text('3 washes a month,\nno re-booking',
-                          style: AppText.h2.copyWith(color: Colors.white)),
-                      const SizedBox(height: 6),
-                      Text(
-                          '${rupees(plan.fromPrice)}${plan.priceSuffix} · at your door',
-                          style: AppText.small
-                              .copyWith(color: const Color(0xFFD1D5DB))),
-                      const SizedBox(height: 12),
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('View plan',
-                            style: AppText.smallStrong
-                                .copyWith(color: AppColors.brand)),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_rounded,
-                            size: 16, color: AppColors.brand),
-                      ]),
-                    ]),
-              ),
-            ]),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpace.md, 10, AppSpace.md, AppSpace.md),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppText.title),
+                    const SizedBox(height: 2),
+                    Text('From ${rupees(price)}',
+                        style: AppText.smallStrong
+                            .copyWith(color: AppColors.primary)),
+                  ]),
+            ),
+          ]),
         ),
       ),
     );
   }
 }
 
-// ── Tagline footer ────────────────────────────────────────────────────────────
-class _Tagline extends StatelessWidget {
-  const _Tagline();
+// ── Monthly car care ─────────────────────────────────────────────────────────
+class _MonthlyCard extends StatelessWidget {
+  final CarType? car;
+  const _MonthlyCard({required this.car});
+
+  /// True for every monthly plan: visits are scheduled, nothing to re-book.
+  static const _line = 'Scheduled washes at your door, every month.';
 
   @override
   Widget build(BuildContext context) {
-    final proof = [
-      if (kRatingValue != null) '★ $kRatingValue',
-      if (kCustomersServed != null) '$kCustomersServed customers',
-      if (kEstablished != null) 'Since $kEstablished',
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.page, 40, AppSpace.page, 32),
-      child: Column(children: [
-        Text('Doorstep car care\nacross $kCityLabel',
-            textAlign: TextAlign.center,
-            style: AppText.h1.copyWith(
-                fontSize: 26,
-                color: AppColors.textSubtle.withValues(alpha: 0.35))),
-        if (proof.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(proof.join('  ·  '),
-              textAlign: TextAlign.center, style: AppText.caption),
-        ],
+    final plans = servicesIn(ServiceCategory.monthly);
+    int priceOf(CarService s) => car == null ? s.fromPrice : s.priceFor(car!);
+    final cheapest = plans.reduce((a, b) => priceOf(a) <= priceOf(b) ? a : b);
+    final badge = plans.map((s) => s.badge).whereType<String>().firstOrNull;
+    final price = 'From ${rupees(priceOf(cheapest))}${cheapest.priceSuffix}';
+    void open() => context.go('/services?cat=monthly');
+
+    return Semantics(
+      container: true,
+      label: 'Monthly car care. $_line $price',
+      child: AppCard(
+        onTap: open,
+        color: AppColors.primarySoft,
+        padding: EdgeInsets.zero,
+        child: LayoutBuilder(builder: (context, c) {
+          // As big as possible without reaching the button column.
+          final carWidth = (c.maxWidth * 0.46).clamp(0.0, c.maxWidth - 186);
+          return Stack(children: [
+            // Soft green disc behind the car.
+            Positioned(
+              right: -carWidth * 0.18,
+              bottom: -carWidth * 0.38,
+              child: Container(
+                width: carWidth * 1.15,
+                height: carWidth * 1.15,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.07),
+                ),
+              ),
+            ),
+            // Cut-out car (transparent PNG), bottom-right.
+            Positioned(
+              right: AppSpace.sm,
+              bottom: AppSpace.md,
+              width: carWidth,
+              child: Image.asset('assets/images/home_monthly_car.png',
+                  fit: BoxFit.fitWidth, excludeFromSemantics: true),
+            ),
+            if (badge != null)
+              Positioned(
+                top: AppSpace.lg,
+                right: AppSpace.lg,
+                child:
+                    Pill(badge, icon: Icons.star_rounded, tone: PillTone.solid),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: SizedBox(
+                width: c.maxWidth - carWidth - AppSpace.xl,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text('Monthly Car Care',
+                            maxLines: 1, softWrap: false, style: AppText.h3),
+                      ),
+                      const SizedBox(height: AppSpace.xs),
+                      Text(_line, style: AppText.small),
+                      const SizedBox(height: AppSpace.sm),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(price,
+                            style:
+                                AppText.h3.copyWith(color: AppColors.primary)),
+                      ),
+                      const SizedBox(height: AppSpace.md),
+                      OutlinedButton(
+                        onPressed: open,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          backgroundColor: AppColors.surface,
+                          side: const BorderSide(color: AppColors.primary),
+                          minimumSize: const Size(0, 38),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          textStyle: AppText.bodyStrong,
+                        ),
+                        child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Know more'),
+                              SizedBox(width: AppSpace.xs),
+                              Icon(Icons.arrow_forward_rounded, size: 16),
+                            ]),
+                      ),
+                    ]),
+              ),
+            ),
+          ]);
+        }),
+      ),
+    );
+  }
+}
+
+// ── Limited time offers: tap a card to copy its code ─────────────────────────
+class _Offers extends StatelessWidget {
+  final bool firstBooking;
+  final CarType? car;
+
+  /// Already shown elsewhere (the hero), so left out here.
+  final Offer? skip;
+  const _Offers({required this.firstBooking, required this.car, this.skip});
+
+  @override
+  Widget build(BuildContext context) {
+    final offers = kOffers
+        .where((o) => o != skip)
+        .where((o) => !(o.firstBookingOnly && !firstBooking))
+        .where((o) =>
+            o.onlyFor == null || (car != null && o.onlyFor!.contains(car)))
+        .toList()
+      // A first-booking offer leads: it's the biggest for a new customer.
+      ..sort((a, b) =>
+          (b.firstBookingOnly ? 1 : 0) - (a.firstBookingOnly ? 1 : 0));
+    if (offers.isEmpty) return const SizedBox.shrink();
+    final shown = offers.take(2).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _SectionTitle('Offers for you', onViewAll: () => context.go('/wallet')),
+      const SizedBox(height: AppSpace.sm),
+      // Full-width tickets, stacked, code on the right: side by side they
+      // were too narrow on small phones ("Off first / booking").
+      for (var i = 0; i < shown.length; i++) ...[
+        if (i > 0) const SizedBox(height: AppSpace.sm),
+        _OfferCard(shown[i], warm: i.isOdd),
+      ],
+    ]);
+  }
+}
+
+class _OfferCard extends StatelessWidget {
+  final Offer offer;
+  final bool warm;
+  const _OfferCard(this.offer, {this.warm = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = warm ? AppColors.warning : AppColors.primary;
+    final code = CustomPaint(
+      painter: _DashedBorder(color: fg),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(offer.code,
+              maxLines: 1,
+              softWrap: false,
+              style: AppText.bodyStrong.copyWith(
+                  color: warm ? AppColors.warning : AppColors.primaryDk,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4)),
+        ),
+      ),
+    );
+    return Semantics(
+      button: true,
+      label: '${offer.headline}, ${offer.title}. Code ${offer.code}. '
+          'Tap to copy',
+      child: ExcludeSemantics(
+        child: AppCard(
+          color: warm ? AppColors.warningSoft : AppColors.primarySoft,
+          padding: const EdgeInsets.all(AppSpace.md),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: offer.code));
+            showMessage(context, 'Code ${offer.code} copied');
+          },
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Icon(
+                warm
+                    ? Icons.card_giftcard_outlined
+                    : Icons.local_offer_outlined,
+                size: 22,
+                color: fg),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(offer.headline,
+                        style: AppText.bodyStrong
+                            .copyWith(fontWeight: FontWeight.w700)),
+                    Text(offer.title,
+                        style: AppText.small.copyWith(color: AppColors.text)),
+                    Text('Tap to copy the code', style: AppText.caption),
+                  ]),
+            ),
+            const SizedBox(width: AppSpace.sm),
+            code,
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dashed rounded outline, like a coupon code box.
+class _DashedBorder extends CustomPainter {
+  final Color color;
+  const _DashedBorder({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+          (Offset.zero & size).deflate(0.6), const Radius.circular(6)));
+    for (final m in path.computeMetrics()) {
+      for (var d = 0.0; d < m.length; d += 7) {
+        canvas.drawPath(m.extractPath(d, d + 4), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorder old) => old.color != color;
+}
+
+/// "Eco promise". Shown only when [kEcoFriendly] is confirmed in
+/// business_info.dart.
+class _EcoBanner extends StatelessWidget {
+  const _EcoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: AppColors.primaryDk,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(children: [
+        const Icon(Icons.water_drop_rounded, size: 24, color: Colors.white),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('A Cleaner Car for a Cleaner Tomorrow',
+                style: AppText.bodyStrong.copyWith(color: Colors.white)),
+            const SizedBox(height: AppSpace.xs),
+            Text('We use water-saving techniques and eco-friendly products.',
+                style: AppText.small.copyWith(color: Colors.white)),
+          ]),
+        ),
+        const SizedBox(width: AppSpace.md),
+        const Icon(Icons.chevron_right_rounded, size: 24, color: Colors.white),
+      ]),
+    );
+  }
+}
+
+// ── Book again: the last completed booking, one tap away ─────────────────────
+/// Opens the booking page for the same package and car. The price shown is
+/// today's price for that car, not what was paid last time.
+class _BookAgain extends StatelessWidget {
+  final BookingRecord booking;
+  const _BookAgain({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final s = serviceById(b.serviceId)!;
+    final price = '${rupees(s.priceFor(b.car))}${s.priceSuffix}';
+    final photo = s.cardPhoto;
+    void book() {
+      HapticFeedback.selectionClick();
+      context.push('/book/${s.id}?car=${b.car.name}');
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Semantics(header: true, child: Text('Book again', style: AppText.h3)),
+      const SizedBox(height: AppSpace.md),
+      Semantics(
+        button: true,
+        label: 'Book ${s.name} again for your ${carTypeNames[b.car]}. '
+            'Last done ${friendlyDate(b.date)}. $price',
+        child: ExcludeSemantics(
+          child: AppCard(
+            onTap: book,
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.thumb),
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: photo != null
+                      ? Image.asset(photo,
+                          fit: BoxFit.cover,
+                          cacheWidth: 200,
+                          excludeFromSemantics: true)
+                      : ColoredBox(
+                          color: AppColors.primarySoft,
+                          child:
+                              Icon(s.icon, color: AppColors.primary, size: 24),
+                        ),
+                ),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(s.name, style: AppText.title),
+                      const SizedBox(height: 2),
+                      Text(
+                          '${carTypeNames[b.car]} · '
+                          'last done ${friendlyDate(b.date)} · $price',
+                          style: AppText.small),
+                    ]),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              OutlinedButton(
+                onPressed: book,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  textStyle: AppText.smallStrong,
+                ),
+                child: const Text('Book'),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ── How it works (new customers only) ────────────────────────────────────────
+/// Three short steps in one row. The full four-step list
+/// (HowItWorksSteps) is too tall for Home.
+class _HowItWorks extends StatelessWidget {
+  const _HowItWorks();
+
+  static const _steps = [
+    'Pick a Service',
+    'Choose a slot',
+    kPayAfterService ? 'Pay after we finish' : 'We clean at your door',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Semantics(header: true, child: Text('How it works', style: AppText.h3)),
+      const SizedBox(height: AppSpace.md),
+      Semantics(
+        label: 'How it works: '
+            '${[
+          for (var i = 0; i < _steps.length; i++) '${i + 1}, ${_steps[i]}'
+        ].join('. ')}',
+        child: ExcludeSemantics(
+          child: AppCard(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.sm, vertical: AppSpace.md),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (var i = 0; i < _steps.length; i++) ...[
+                if (i > 0)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textSubtle),
+                  ),
+                Expanded(
+                  child: Column(children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                          color: AppColors.ink, shape: BoxShape.circle),
+                      child: Text('${i + 1}',
+                          style: AppText.smallStrong
+                              .copyWith(color: AppColors.brand)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(_steps[i],
+                        textAlign: TextAlign.center,
+                        style: AppText.small.copyWith(
+                            color: i == _steps.length - 1
+                                ? AppColors.primaryDk
+                                : AppColors.text,
+                            fontWeight: i == _steps.length - 1
+                                ? FontWeight.w700
+                                : null)),
+                  ]),
+                ),
+              ],
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ── Before / after photo ─────────────────────────────────────────────────────
+/// A side-by-side before/after photo (left half before, right half after),
+/// labelled on the photo. Shown only when kBeforeAfterPhoto is set.
+class _BeforeAfter extends StatelessWidget {
+  final String photo;
+  const _BeforeAfter({required this.photo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Semantics(
+          header: true, child: Text('See the difference', style: AppText.h3)),
+      const SizedBox(height: AppSpace.md),
+      Semantics(
+        image: true,
+        label: 'A dirty wheel before cleaning, and the same wheel after',
+        child: ExcludeSemantics(
+          child: AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(AppRadius.md - 1)),
+                    child: AspectRatio(
+                      aspectRatio: 4 / 3,
+                      child: Stack(fit: StackFit.expand, children: [
+                        Image.asset(photo, fit: BoxFit.cover, cacheWidth: 900),
+                        const Positioned(
+                          left: AppSpace.md,
+                          bottom: AppSpace.md,
+                          child: Pill('Before', tone: PillTone.dark),
+                        ),
+                        const Positioned(
+                          right: AppSpace.md,
+                          bottom: AppSpace.md,
+                          child: Pill('After', tone: PillTone.solid),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    child: Text(
+                        'Tyre and wheel cleaning, part of every '
+                        'Exterior and Exterior + Interior wash.',
+                        style: AppText.small),
+                  ),
+                ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ── Live booking (only when a booking is in progress) ────────────────────────
+class _LiveBookingCard extends StatelessWidget {
+  final BookingRecord booking;
+  const _LiveBookingCard({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final slot = slotById(b.slotId);
+    final arrival = b.confirmedArrivalLabel;
+    // Requested and confirmed headlines already name the slot.
+    final headlineHasSlot = b.status == BookingStatus.requested ||
+        (b.status == BookingStatus.confirmed && arrival != null);
+    final line = [
+      if (arrival != null) 'Likely around $arrival',
+      b.serviceName,
+      if (!headlineHasSlot && arrival == null) slot?.short ?? b.slotLabel,
+    ].join(' · ');
+    return AppCard(
+      selected: true,
+      color: AppColors.surface,
+      onTap: () => context.push('/bookings/${b.ref}'),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${b.status.label} · ${friendlyDate(b.date)}',
+                  style: AppText.caption.copyWith(
+                      color: AppColors.primary, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(progressHeadline(b), style: AppText.h3),
+              const SizedBox(height: 2),
+              Text(line,
+                  style: AppText.small,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ]),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textSubtle),
+        ]),
+        const SizedBox(height: 14),
+        // Dots only: the status line above already names the step, and five
+        // labels don't fit a phone width without shrinking.
+        BookingProgress(status: b.status, showLabels: false),
       ]),
     );
   }

@@ -35,6 +35,15 @@ class CarService {
   final String? badge;
   final String priceSuffix;
 
+  /// Up to four short lines for the package card; defaults to the first
+  /// three of [included]. Each must be something [included] really covers.
+  final List<String>? _highlights;
+  List<String> get highlights => _highlights ?? included.take(3).toList();
+
+  /// A few words under the name on the package card; defaults to [tagline].
+  final String? _summary;
+  String get summary => _summary ?? tagline;
+
   const CarService({
     required this.id,
     required this.category,
@@ -51,7 +60,10 @@ class CarService {
     this.notIncluded = const [],
     this.badge,
     this.priceSuffix = '',
-  });
+    List<String>? highlights,
+    String? summary,
+  })  : _highlights = highlights,
+        _summary = summary;
 
   /// Whether the photo already shows our logo (uniform, bag, bucket). Photos
   /// without it get a small logo badge so every service image is branded.
@@ -116,9 +128,16 @@ final serviceCatalog = <CarService>[
         'Our most booked wash. A foam shampoo and high-pressure rinse for the body and wheels, plus a full interior vacuum, dashboard polish and footmat cleaning.',
     image: 'assets/images/wash_collage.jpg',
     icon: Icons.local_car_wash_rounded,
-    duration: '1–2 hrs',
+    duration: '1.5–2.5 hrs',
     prices: washPackagePrices[WashPackage.exteriorInterior]!,
     included: washPackageInclusions[WashPackage.exteriorInterior]!,
+    summary: 'Complete care, inside & out',
+    highlights: const [
+      'Foam wash outside',
+      'Interior vacuum',
+      'Dashboard polish',
+      'Tyre & wheel cleaning',
+    ],
     notIncluded: const [
       'Seat cleaning (available as an extra)',
       'Paint rubbing or waxing'
@@ -135,9 +154,15 @@ final serviceCatalog = <CarService>[
         'A thorough outside-only clean: foam shampoo, high-pressure rinse, alloy and tyre cleaning, tyre polish and black-part polish.',
     image: 'assets/images/pressure_rinse.jpg',
     icon: Icons.water_drop_rounded,
-    duration: '1–2 hrs',
+    duration: '1 hr',
     prices: washPackagePrices[WashPackage.exteriorOnly]!,
     included: washPackageInclusions[WashPackage.exteriorOnly]!,
+    summary: 'A quick refresh outside',
+    highlights: const [
+      'Foam wash outside',
+      'Wheel & tyre polish',
+      'Exterior body polish',
+    ],
     notIncluded: const ['Any interior cleaning'],
     bestFor: 'Cars with a clean cabin that need the dust and grime washed off.',
   ),
@@ -150,9 +175,15 @@ final serviceCatalog = <CarService>[
         'An inside-only clean: full vacuum of seats, floor and boot, interior black-part polish, dashboard polish and footmat cleaning.',
     image: 'assets/images/interior_vacuum.jpg',
     icon: Icons.airline_seat_recline_normal_rounded,
-    duration: '1–2 hrs',
+    duration: '1 hr',
     prices: washPackagePrices[WashPackage.interiorOnly]!,
     included: washPackageInclusions[WashPackage.interiorOnly]!,
+    summary: 'A fresh, clean cabin',
+    highlights: const [
+      'Interior vacuum',
+      'Dashboard polish',
+      'Footmat cleaning',
+    ],
     notIncluded: const [
       'Exterior wash',
       'Seat shampoo (see Interior Dry Cleaning)'
@@ -168,9 +199,15 @@ final serviceCatalog = <CarService>[
         'A quick, water-saving hand wash: the body is washed and wiped with microfiber, glass and mirrors are cleaned, tyres and wheels wiped, and the cabin and footmats dusted.',
     image: 'assets/images/bucket_wash.jpg',
     icon: Icons.water_rounded,
-    duration: '30–45 mins',
+    duration: '1 hr',
     prices: washPackagePrices[WashPackage.bucket]!,
     included: washPackageInclusions[WashPackage.bucket]!,
+    summary: 'Quick hand wash & wipe-down',
+    highlights: const [
+      'Hand body wash',
+      'Glass & mirror cleaning',
+      'Tyre & wheel wipe',
+    ],
     notIncluded: const ['Foam or high-pressure wash', 'Interior vacuuming'],
     bestFor: 'Keeping a lightly dusty car tidy between full washes.',
   ),
@@ -184,7 +221,7 @@ final serviceCatalog = <CarService>[
     description: _addonDescription('dry-cleaning'),
     image: 'assets/images/seat_shampoo.jpg',
     icon: Icons.cleaning_services_rounded,
-    duration: '2–3 hrs',
+    duration: '3 hrs',
     prices: premiumAddonPrices['dry-cleaning']!,
     included: _addonInclusions('dry-cleaning'),
     notIncluded: const ['Exterior wash'],
@@ -199,7 +236,7 @@ final serviceCatalog = <CarService>[
     description: _addonDescription('3m-wax-exterior'),
     image: 'assets/images/wax_finish.jpg',
     icon: Icons.auto_awesome_rounded,
-    duration: '2–3 hrs',
+    duration: '2 hrs',
     prices: premiumAddonPrices['3m-wax-exterior']!,
     included: _addonInclusions('3m-wax-exterior'),
     notIncluded: const ['Scratch removal (see Rubbing)', 'Interior cleaning'],
@@ -213,7 +250,7 @@ final serviceCatalog = <CarService>[
     description: _addonDescription('rubbing-exterior'),
     image: 'assets/images/machine_polish.jpg',
     icon: Icons.blur_on_rounded,
-    duration: '2–3 hrs',
+    duration: '3 hrs',
     prices: premiumAddonPrices['rubbing-exterior']!,
     included: _addonInclusions('rubbing-exterior'),
     notIncluded: const ['Wax coating', 'Interior cleaning'],
@@ -241,7 +278,7 @@ final serviceCatalog = <CarService>[
     description: _addonDescription('dryclean-wax-exterior'),
     image: 'assets/images/dryclean_wax.jpg',
     icon: Icons.layers_rounded,
-    duration: '2–3 hrs',
+    duration: '4–4.5 hrs',
     prices: premiumAddonPrices['dryclean-wax-exterior']!,
     included: _addonInclusions('dryclean-wax-exterior'),
     notIncluded: const ['Machine rubbing'],
@@ -255,7 +292,7 @@ final serviceCatalog = <CarService>[
     description: _addonDescription('rubbing-dryclean-exterior'),
     image: 'assets/images/rubbing_dryclean.jpg',
     icon: Icons.handyman_rounded,
-    duration: '2–3 hrs',
+    duration: '5 hrs',
     prices: premiumAddonPrices['rubbing-dryclean-exterior']!,
     included: _addonInclusions('rubbing-dryclean-exterior'),
     notIncluded: const ['Wax coating'],
@@ -269,7 +306,7 @@ final serviceCatalog = <CarService>[
     description: _addonDescription('full-package'),
     image: 'assets/images/detailing_collage.jpg',
     icon: Icons.workspace_premium_rounded,
-    duration: '2–3 hrs',
+    duration: '5 hrs',
     prices: premiumAddonPrices['full-package']!,
     included: _addonInclusions('full-package'),
     bestFor:
