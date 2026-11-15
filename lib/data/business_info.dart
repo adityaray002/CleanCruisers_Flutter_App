@@ -18,6 +18,10 @@ const kCityLabel = 'Delhi NCR';
 // after the service is done.
 const kPayAfterService = true;
 
+// How long the team usually takes to confirm a slot request (owner,
+// 15 Nov 2026). Shown on the booking page and after a request is sent.
+const kConfirmUsually = '1–2 hours';
+
 // ── Social proof ──────────────────────────────────────────────────────────────
 // TODO(business): confirm these are current before each release. Set to null
 // to hide a figure rather than showing an unverified number.

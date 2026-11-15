@@ -13,7 +13,11 @@ export '../models/worker.dart';
 
 class BookingCloudException implements Exception {
   final String message;
-  const BookingCloudException(this.message);
+
+  /// The chosen slot can no longer be requested (taken, closed or too late).
+  /// The booking page offers other open windows instead of a dead end.
+  final bool slotTaken;
+  const BookingCloudException(this.message, {this.slotTaken = false});
   @override
   String toString() => message;
 }
@@ -247,11 +251,13 @@ class BookingCloud {
           case WindowState.full:
           case WindowState.closedByTeam:
             throw const BookingCloudException(
-                'Sorry, that slot just got booked. Please pick another time.');
+                'Sorry, that slot just got booked. Please pick another time.',
+                slotTaken: true);
           case WindowState.passed:
           case WindowState.tooLate:
             throw const BookingCloudException(
-                'That slot is no longer available for this service. Please pick another time.');
+                'That slot is no longer available for this service. Please pick another time.',
+                slotTaken: true);
         }
         tx.set(doc, {
           ...booking.toCustomerJson(),

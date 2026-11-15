@@ -118,13 +118,24 @@ void main() {
   both('service_detailing',
       const ServiceDetailScreen(serviceId: 'rubbing-wax-exterior'), 2000,
       prefs: profile);
-  // Booking page: car + address come from the profile.
-  both('book', const BookingFlowScreen(serviceId: 'wash-full'), 1700,
-      prefs: profile);
-  both('book_slot', const BookingFlowScreen(serviceId: 'wash-full'), 1700,
+  // Booking, three steps: car + address come from the profile.
+  both('book', const BookingFlowScreen(serviceId: 'wash-full'), 1200,
       prefs: profile, interact: (t) async {
+    await t.tap(find.text('Seat cleaning'));
+    await t.pump(const Duration(milliseconds: 300));
+  });
+  both('book_slot', const BookingFlowScreen(serviceId: 'wash-full'), 1400,
+      prefs: profile, interact: (t) async {
+    await t.tap(find.text('Continue'));
+    await t.pump(const Duration(milliseconds: 300));
     await toSlot(t);
-    await t.tap(find.text('Add').first);
+  });
+  both('book_review', const BookingFlowScreen(serviceId: 'wash-full'), 1500,
+      prefs: profile, interact: (t) async {
+    await t.tap(find.text('Continue'));
+    await t.pump(const Duration(milliseconds: 300));
+    await toSlot(t);
+    await t.tap(find.text('Continue'));
     await t.pump(const Duration(milliseconds: 300));
   });
   both('onboard_address', const AddressScreen(), 1000);

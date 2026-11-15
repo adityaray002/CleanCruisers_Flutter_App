@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../core/scheduling.dart';
 import '../../core/theme.dart';
+import '../../data/business_info.dart';
 import '../../data/offers.dart';
 import '../../models/booking.dart';
 import '../../models/service.dart';
@@ -14,7 +15,7 @@ import '../../widgets/offer_card.dart';
 import '../../widgets/service_widgets.dart';
 import '../../widgets/ui.dart';
 
-/// Sections of the one-page checkout (see booking_flow_screen.dart).
+/// Pieces of the three-step booking (see booking_flow_screen.dart).
 
 class StepHeading extends StatelessWidget {
   final IconData icon;
@@ -69,7 +70,7 @@ class BookingItemCard extends StatelessWidget {
         Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(s.name,
+            Text(s.listName,
                 style: AppText.bodyStrong,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis),
@@ -102,7 +103,7 @@ class BookingItemCard extends StatelessWidget {
   }
 }
 
-// ── Add-ons: "add more" strip ─────────────────────────────────────────────────
+// ── Add-ons: one list, a stepper for per-seat extras, a tick for the rest ──
 class AddOnStrip extends StatelessWidget {
   final BookingDraft draft;
   final DraftNotifier notifier;
@@ -111,84 +112,116 @@ class AddOnStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final extras = draft.service.extras;
-    // Height comes from the content so large text never clips.
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          for (var i = 0; i < extras.length; i++) ...[
-            if (i > 0) const SizedBox(width: 10),
-            SizedBox(
-              width: 132,
-              child: _AddOnCard(
-                extra: extras[i],
-                qty: draft.extras[extras[i].id] ?? 0,
-                onChanged: (q) => notifier.setExtra(extras[i].id, q),
-              ),
-            ),
-          ],
-        ]),
-      ),
+    return AppCard(
+      radius: AppRadius.lg,
+      padding: EdgeInsets.zero,
+      child: Column(children: [
+        for (var i = 0; i < extras.length; i++) ...[
+          if (i > 0) const Divider(height: 1),
+          _ExtraRow(
+            extra: extras[i],
+            qty: draft.extras[extras[i].id] ?? 0,
+            onChanged: (q) => notifier.setExtra(extras[i].id, q),
+          ),
+        ],
+      ]),
     );
   }
 }
 
-class _AddOnCard extends StatelessWidget {
+class _ExtraRow extends StatelessWidget {
   final Extra extra;
   final int qty;
   final ValueChanged<int> onChanged;
-  const _AddOnCard(
+  const _ExtraRow(
       {required this.extra, required this.qty, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final on = qty > 0;
-    return AppCard(
-      selected: on,
-      padding: const EdgeInsets.all(AppSpace.md),
+    final price = '${rupees(extra.price)}'
+        '${extra.unit != null ? ' per ${extra.unit}' : ''}'
+        '${extra.maxQty > 1 ? ' · up to ${extra.maxQty}' : ''}';
+    final text = Expanded(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(extra.name,
-            style: AppText.bodyStrong,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis),
+        Text(extra.name, style: AppText.title),
         const SizedBox(height: 2),
-        Text(
-            '${rupees(extra.price)}'
-            '${extra.unit != null ? ' / ${extra.unit}' : ''}',
-            style: AppText.caption),
-        const Spacer(),
-        const SizedBox(height: AppSpace.sm),
-        if (!on)
-          Semantics(
-            button: true,
-            label: 'Add ${extra.name}',
-            child: ExcludeSemantics(
-              child: InlineButton(
-                  label: 'Add', expand: true, onPressed: () => onChanged(1)),
-            ),
-          )
-        else
-          // Shop-style stepper: − qty +
+        Text(extra.maxQty > 1 ? price : '+$price', style: AppText.small),
+      ]),
+    );
+
+    if (extra.maxQty > 1) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg, AppSpace.md, AppSpace.md, AppSpace.md),
+        child: Row(children: [
+          text,
+          const SizedBox(width: AppSpace.sm),
           Container(
-            height: 40,
+            padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Row(children: [
-              _Step(
-                  Icons.remove_rounded, 'Remove one', () => onChanged(qty - 1)),
-              Expanded(
-                child: Text('$qty',
-                    textAlign: TextAlign.center,
-                    style: AppText.smallStrong.copyWith(color: Colors.white)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _Step(Icons.remove_rounded, 'One ${extra.unit ?? ''} less',
+                  qty > 0 ? () => onChanged(qty - 1) : null,
+                  filled: false),
+              Semantics(
+                liveRegion: true,
+                label: '$qty ${extra.unit ?? ''}${qty == 1 ? '' : 's'}',
+                child: ExcludeSemantics(
+                  child: SizedBox(
+                    width: 30,
+                    child: Text('$qty',
+                        textAlign: TextAlign.center, style: AppText.bodyStrong),
+                  ),
+                ),
               ),
-              _Step(Icons.add_rounded, 'Add one',
+              _Step(Icons.add_rounded, 'One ${extra.unit ?? ''} more',
                   qty < extra.maxQty ? () => onChanged(qty + 1) : null),
             ]),
           ),
-      ]),
+        ]),
+      );
+    }
+
+    return Semantics(
+      button: true,
+      selected: on,
+      label: '${extra.name}, +${rupees(extra.price)}',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onChanged(on ? 0 : 1);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.lg, vertical: AppSpace.md),
+            child: Row(children: [
+              text,
+              const SizedBox(width: AppSpace.sm),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: on ? AppColors.primary : AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: on ? AppColors.primary : const Color(0xFFB9C2BC),
+                      width: 2),
+                ),
+                child: on
+                    ? const Icon(Icons.check_rounded,
+                        size: 16, color: Colors.white)
+                    : null,
+              ),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -197,12 +230,20 @@ class _Step extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback? onTap;
-  const _Step(this.icon, this.tooltip, this.onTap);
+  final bool filled;
+  const _Step(this.icon, this.tooltip, this.onTap, {this.filled = true});
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
+  Widget build(BuildContext context) {
+    final bg = filled ? AppColors.primary : AppColors.surfaceAlt;
+    final fg = filled ? Colors.white : AppColors.text;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: onTap == null ? AppColors.surfaceAlt : bg,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           onTap: onTap == null
               ? null
               : () {
@@ -210,13 +251,15 @@ class _Step extends StatelessWidget {
                   onTap!();
                 },
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             child: Icon(icon,
-                size: 18, color: onTap == null ? Colors.white38 : Colors.white),
+                size: 20, color: onTap == null ? AppColors.textSubtle : fg),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ── Slot picker ───────────────────────────────────────────────────────────────
@@ -371,11 +414,10 @@ class _DayChip extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           width: 62,
           decoration: BoxDecoration(
-            color: selected ? AppColors.primarySoft : AppColors.surface,
+            color: selected ? AppColors.ink : AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(
-                color: selected ? AppColors.primary : AppColors.border,
-                width: selected ? 1.8 : 1),
+            border:
+                Border.all(color: selected ? AppColors.ink : AppColors.border),
           ),
           child: ExcludeSemantics(
             child:
@@ -383,15 +425,15 @@ class _DayChip extends StatelessWidget {
               Text(top,
                   style: AppText.caption.copyWith(
                       color: selected
-                          ? AppColors.primaryDk
+                          ? const Color(0xFFB8C0C7)
                           : AppColors.textSubtle)),
               Text('${day.day}',
                   style: AppText.h3.copyWith(
-                      color: selected ? AppColors.primaryDk : AppColors.text)),
+                      color: selected ? Colors.white : AppColors.text)),
               Text(monthShort(day),
                   style: AppText.caption.copyWith(
                       color: selected
-                          ? AppColors.primaryDk
+                          ? const Color(0xFFB8C0C7)
                           : AppColors.textSubtle)),
             ]),
           ),
@@ -431,7 +473,7 @@ class BillCard extends ConsumerWidget {
     return AppCard(
       child: Column(children: [
         row(
-            s.name,
+            s.listName,
             '${rupees(d.servicePrice)}'
             '${s.priceSuffix.isEmpty ? '' : ' ${s.priceSuffix}'}'),
         for (final (e, q) in d.selectedExtras)
@@ -458,7 +500,10 @@ class BillCard extends ConsumerWidget {
         ),
         const Divider(height: AppSpace.lg),
         Row(children: [
-          Expanded(child: Text('To pay', style: AppText.bodyStrong)),
+          Expanded(
+              child: Text(
+                  kPayAfterService ? 'To pay after the service' : 'To pay',
+                  style: AppText.bodyStrong)),
           Text(rupees(payable), style: AppText.price),
         ]),
       ]),
@@ -484,7 +529,7 @@ class _SlotChip extends StatelessWidget {
     final open = state == WindowState.preference;
     final on = selected && open;
     final reason = switch (state) {
-      WindowState.full => 'Fully booked',
+      WindowState.full => 'Full',
       WindowState.tooLate => 'Too late for this service',
       WindowState.closedByTeam => 'Not available',
       WindowState.passed => 'Time passed',
@@ -507,26 +552,27 @@ class _SlotChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
             color: on
-                ? AppColors.primarySoft
+                ? AppColors.primary
                 : open
                     ? AppColors.surface
                     : AppColors.surfaceAlt,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
                 color: on
                     ? AppColors.primary
                     : open
                         ? AppColors.border
-                        : Colors.transparent,
-                width: on ? 1.8 : 1),
+                        : Colors.transparent),
           ),
           child: ExcludeSemantics(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               FittedBox(
                 child: Text(slot.short,
                     style: AppText.bodyStrong.copyWith(
+                        fontWeight: FontWeight.w800,
+                        decoration: open ? null : TextDecoration.lineThrough,
                         color: on
-                            ? AppColors.primaryDk
+                            ? Colors.white
                             : open
                                 ? AppColors.text
                                 : AppColors.textSubtle)),
@@ -541,7 +587,7 @@ class _SlotChip extends StatelessWidget {
                     readyByLabel(slot.startMinute, durationMinutes),
                     style: AppText.caption.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: on ? AppColors.primaryDk : AppColors.primary,
+                      color: on ? Colors.white : AppColors.primary,
                     ),
                   ),
                 ),
