@@ -3,28 +3,34 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
-import '../core/pricing.dart';
-import '../core/scheduling.dart' show clockLabel;
+import '../core/scheduling.dart' show canFinishByClose, clockLabel;
 import '../core/theme.dart';
+import '../data/business_info.dart';
 import '../models/booking.dart';
 import '../models/service.dart';
 import '../providers/app_providers.dart';
 import '../widgets/booking_progress.dart';
+import '../widgets/contact_actions.dart';
 import '../widgets/ui.dart';
+import 'bookings_screen.dart' show statusChip;
 
+/// One booking (v3 design), built only from what the booking really holds:
+/// a status card for its state, any change the customer has asked for,
+/// the expert (once assigned), where and which car, the bill or receipt,
+/// the status history, and the actions that fit the state.
+///
+/// Cancelling and changing the time are *requests* to the team
+/// (requestCustomerChange); the page says so and never shows them as done.
 class BookingDetailScreen extends ConsumerWidget {
   final String bookingRef;
   const BookingDetailScreen({super.key, required this.bookingRef});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final remoteAsync = ref.watch(customerCloudBookingsProvider);
-    final remote = remoteAsync.valueOrNull;
     final b = ref
         .watch(myBookingsProvider)
         .where((item) => item.ref == bookingRef)
         .firstOrNull;
-    final live = remote?.any((item) => item.ref == bookingRef) ?? false;
 
     if (b == null) {
       return Scaffold(
@@ -43,970 +49,664 @@ class BookingDetailScreen extends ConsumerWidget {
       );
     }
 
-    final isCompleted = b.status == BookingStatus.completed;
-    final isWeatherHold = b.status == BookingStatus.rescheduleNeeded;
-    final isConfirmed = b.status == BookingStatus.confirmed ||
-        b.status == BookingStatus.onTheWay ||
-        b.status == BookingStatus.inService;
-    final parking = parkingOf(b.address) ?? '';
-    final isCovered = parking.toLowerCase().contains('basement') ||
-        parking.toLowerCase().contains('covered') ||
-        parking.toLowerCase().contains('stilt');
+    final service = serviceById(b.serviceId);
+    final s = b.status;
+    final active = !s.isFinal;
+    final canChange = s == BookingStatus.requested ||
+        s == BookingStatus.teamReview ||
+        s == BookingStatus.confirmed;
+    final actions = _actions(context, ref, b, service, canChange);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark
           .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
         backgroundColor: AppColors.bg,
-        appBar: AppBar(
-          title: Text(
-            isCompleted
-                ? 'Completed Service'
-                : isWeatherHold
-                    ? (isCovered
-                        ? 'Rain Alert · Active Wash'
-                        : 'Weather Reschedule')
-                    : 'Booking #${b.ref.substring(b.ref.length > 8 ? b.ref.length - 8 : 0)}',
-            style: AppText.h3,
-          ),
-          actions: [
-            if (isCompleted)
-              TextButton.icon(
-                onPressed: () =>
-                    showMessage(context, 'Downloading tax invoice PDF...'),
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-                label: const Text('PDF Invoice'),
-              )
-            else
-              IconButton(
-                onPressed: () => _requestChange(context, ref, b),
-                icon: const Icon(Icons.more_vert_rounded),
-              ),
-          ],
-        ),
-        body: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(customerCloudBookingsProvider),
-          child: ListView(
-            padding:
-                const EdgeInsets.fromLTRB(AppSpace.page, 8, AppSpace.page, 32),
-            children: [
-              // ── SCREEN 12: Weather Delay / Monsoon Reschedule ───────────────
-              if (isWeatherHold) ...[
-                _WeatherHoldCard(
-                  booking: b,
-                  onConfirmPriority: () => _sendChange(context, ref, b,
-                      'Priority slot confirmed for tomorrow 9:30 AM'),
-                  onPickOther: () => _pickNewSlot(context, ref, b),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // ── SCREEN 14: Completed Banner ─────────────────────────────────
-              if (isCompleted) ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F7EE),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3)),
+        body: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.15,
+          child: SafeArea(
+            bottom: false,
+            child: RefreshIndicator(
+              onRefresh: () async =>
+                  ref.invalidate(customerCloudBookingsProvider),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xxl),
+                children: [
+                  _Header(
+                    title: service?.listName ?? b.serviceName,
+                    bookingRef: b.ref,
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.verified_rounded,
-                          color: AppColors.primary, size: 24),
-                      const SizedBox(width: 12),
+                  const SizedBox(height: AppSpace.lg),
+                  _StatusCard(booking: b, service: service),
+                  if (b.customerChangeRequest != null && active) ...[
+                    const SizedBox(height: AppSpace.md),
+                    NoticeBox(
+                      icon: Icons.hourglass_top_rounded,
+                      warning: true,
+                      text: 'You asked: "${b.customerChangeRequest}". '
+                          'We\'ll confirm in the app.',
+                    ),
+                  ],
+                  if (s == BookingStatus.rescheduleNeeded) ...[
+                    const SizedBox(height: AppSpace.md),
+                    _HoldOptions(
+                      booking: b,
+                      onSend: (text) => _send(context, ref, b, text),
+                      onPickOther: () => _changeTime(context, ref, b),
+                    ),
+                  ],
+                  if (b.workerId != null && active) ...[
+                    const SizedBox(height: AppSpace.md),
+                    const _ExpertRow(),
+                  ],
+                  if (active) ...[
+                    const SizedBox(height: AppSpace.md),
+                    const NoticeBox(
+                      icon: Icons.water_drop_outlined,
+                      text: 'Before the slot: keep a water tap and plug point '
+                          'ready near the car. We bring 30 m cords and pipes.',
+                    ),
+                  ],
+                  const SizedBox(height: AppSpace.md),
+                  _Details(booking: b),
+                  const SizedBox(height: AppSpace.md),
+                  _Updates(booking: b),
+                  const SizedBox(height: AppSpace.md),
+                  AppCard(
+                    onTap: () => openWhatsApp(context),
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    child: Row(children: [
+                      const IconBadge(Icons.chat_outlined, size: 40),
+                      const SizedBox(width: AppSpace.md),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'SERVICE COMPLETED & INSPECTED',
-                              style: AppText.caption.copyWith(
-                                color: AppColors.primaryDk,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Completed today at 11:45 AM · Rahul Sharma',
-                              style:
-                                  AppText.small.copyWith(color: AppColors.text),
-                            ),
-                          ],
-                        ),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  s == BookingStatus.completed
+                                      ? 'Something not right?'
+                                      : 'Need help?',
+                                  style: AppText.title),
+                              Text('Chat with us on WhatsApp',
+                                  style: AppText.small),
+                            ]),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // ── SCREEN 10: Confirmed Banner & Stepper ───────────────────────
-              if (isConfirmed) ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F7EE),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'CONFIRMED & ASSIGNED',
-                              style: AppText.overline.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Expert Arrives Tomorrow',
-                        style: AppText.h2.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${friendlyDate(b.date)} · Slot: ${slotById(b.slotId)?.short ?? b.slotLabel}',
-                        style:
-                            AppText.small.copyWith(color: AppColors.textSubtle),
-                      ),
-                      const SizedBox(height: 14),
-                      BookingProgress(status: b.status),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // ── Technician Card (Rahul Sharma) ──────────────────────────────
-              if (isConfirmed || isCompleted || isWeatherHold) ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppShadow.card,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF0C2417),
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              'RS',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text('Rahul Sharma',
-                                        style: AppText.bodyStrong),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primarySoft,
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.star_rounded,
-                                              size: 12, color: AppColors.star),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            '4.92',
-                                            style: AppText.caption.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                              color: AppColors.primaryDk,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Lead Detailer, CleanCruisers verified',
-                                  style: AppText.caption
-                                      .copyWith(color: AppColors.textSubtle),
-                                ),
-                                Text(
-                                  'Mobile Van: HR 26 DL 4821',
-                                  style: AppText.caption.copyWith(
-                                    color: AppColors.text,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // ── Receipt (from this booking's real amounts) ──────────────────
-              if (isCompleted) ...[
-                _Receipt(booking: b),
-                const SizedBox(height: 16),
-
-                // Google 5-Star Review Widget
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
-                  ),
-                  child: Column(
-                    children: [
-                      Semantics(
-                        label: 'Rated 5 out of 5 stars by customers',
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.star_rounded,
-                                color: Color(0xFFD97706), size: 22),
-                            Icon(Icons.star_rounded,
-                                color: Color(0xFFD97706), size: 22),
-                            Icon(Icons.star_rounded,
-                                color: Color(0xFFD97706), size: 22),
-                            Icon(Icons.star_rounded,
-                                color: Color(0xFFD97706), size: 22),
-                            Icon(Icons.star_rounded,
-                                color: Color(0xFFD97706), size: 22),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Loved the doorstep service on your ${b.carModel.isNotEmpty ? b.carModel : carTypeNames[b.car]}?',
-                        style: AppText.smallStrong,
-                        textAlign: TextAlign.center,
-                      ),
-                      ElevatedButton(
-                        onPressed: () => showMessage(
-                            context, 'Opening Google Review page...'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD97706),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.sm)),
-                        ),
-                        child: const Text('Rate Rahul on Google Reviews'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // ── SERVICE & LOCATION CARD ────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'SERVICE & LOCATION',
-                      style: AppText.overline.copyWith(
-                        color: AppColors.textSubtle,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _specRow('Package:', b.serviceName),
-                    _specRow(
-                        'Car:',
-                        b.carModel.isNotEmpty
-                            ? b.carModel
-                            : carTypeNames[b.car]!),
-                    _specRow(
-                        'On-Site Time:', '~2.5 hrs work (Travel separate)'),
-                    _specRow('On-Site Setup:',
-                        'Water tap & plug needed (30m cords brought by team)'),
-                    _specRow('Service Address:', b.address),
-                    _specRow(
-                        'Car Recipient:',
-                        b.forSomeoneElse && b.recipientName != null
-                            ? b.recipientName!
-                            : '${b.name} (${phoneLabel(b.phone)})'),
-                    const Divider(height: 16, color: AppColors.border),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Total Amount Due',
-                                style: AppText.caption
-                                    .copyWith(color: AppColors.textSubtle)),
-                            Text(rupees(b.payable), style: AppText.priceSm),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceAlt,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Pay after service - Cash or UPI',
-                            style: AppText.caption.copyWith(
-                              color: AppColors.textSubtle,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // ── STATUS TIMELINE ───────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'STATUS TIMELINE',
-                      style: AppText.overline.copyWith(
-                        color: AppColors.textSubtle,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _timelineItem('10:34 AM',
-                        'Booking request submitted by customer in app'),
-                    _timelineItem('10:38 AM',
-                        'Route validated (7.8 km road leg from Sector 29 hub)'),
-                    _timelineItem(
-                        '10:41 AM', 'Booking Confirmed & Rahul assigned'),
-                    if (isCompleted)
-                      _timelineItem(
-                          '11:45 AM', 'Service completed & inspected on-site'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── STICKY FOOTER ACTIONS ──────────────────────────────────────
-              if (isCompleted) ...[
-                PrimaryButton(
-                  label: 'Download Official Tax Invoice (PDF)',
-                  icon: Icons.picture_as_pdf_rounded,
-                  onPressed: () =>
-                      showMessage(context, 'Downloading tax invoice...'),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => context.go('/services'),
-                  child: const Text('Book Next Doorstep Detailing'),
-                ),
-              ] else if (isWeatherHold) ...[
-                if (isCovered) ...[
-                  PrimaryButton(
-                    label: 'Wash on Schedule (Covered Parking)',
-                    icon: Icons.check_circle_rounded,
-                    onPressed: () => _sendChange(context, ref, b,
-                        'Covered parking confirmed - wash on schedule'),
-                  ),
-                ] else ...[
-                  PrimaryButton(
-                    label: 'Confirm Priority Slot (Tomorrow 9:30 AM)',
-                    onPressed: () => _sendChange(context, ref, b,
-                        'Priority weather reschedule accepted'),
-                  ),
-                  const SizedBox(height: 8),
-                  SecondaryButton(
-                    label: 'Pick Another Date / Time Slot',
-                    onPressed: () => _pickNewSlot(context, ref, b),
+                      const Icon(Icons.chevron_right_rounded,
+                          color: AppColors.textSubtle),
+                    ]),
                   ),
                 ],
-              ] else ...[
-                SecondaryButton(
-                  label: 'Request Reschedule / Change',
-                  icon: Icons.edit_calendar_outlined,
-                  onPressed: () => _requestChange(context, ref, b),
-                ),
-              ],
-            ],
+              ),
+            ),
           ),
         ),
+        bottomNavigationBar: actions == null
+            ? null
+            : MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.15, child: actions),
       ),
     );
   }
 
-  static Widget _specRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label,
-                style: AppText.caption.copyWith(color: AppColors.textSubtle)),
+  Widget? _actions(BuildContext context, WidgetRef ref, BookingRecord b,
+      CarService? service, bool canChange) {
+    if (b.status == BookingStatus.completed && service != null) {
+      return BottomActionBar(
+        child: Row(children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(rupees(service.priceFor(b.car)),
+                  style: AppText.price.copyWith(fontSize: 22)),
+              Text('today\'s price', style: AppText.caption),
+            ],
           ),
+          const SizedBox(width: AppSpace.md),
           Expanded(
-            child: Text(value, style: AppText.smallStrong),
+            child: PrimaryButton(
+              label: 'Book again',
+              onPressed: () =>
+                  context.push('/book/${service.id}?car=${b.car.name}'),
+            ),
           ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _timelineItem(String time, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('• $time:',
-              style: AppText.caption.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(width: 6),
+        ]),
+      );
+    }
+    if (canChange && b.customerChangeRequest == null) {
+      return BottomActionBar(
+        child: Row(children: [
           Expanded(
-            child: Text(text,
-                style: AppText.caption.copyWith(color: AppColors.text)),
+            child: OutlinedButton(
+              onPressed: () => _cancel(context, ref, b),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 54),
+                foregroundColor: AppColors.text,
+                side: const BorderSide(color: AppColors.border, width: 1.5),
+                textStyle: AppText.bodyStrong,
+              ),
+              child: const Text('Cancel'),
+            ),
           ),
-        ],
-      ),
-    );
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            flex: 2,
+            child: SecondaryButton(
+              label: 'Change time',
+              icon: Icons.edit_calendar_outlined,
+              onPressed: () => _changeTime(context, ref, b),
+            ),
+          ),
+        ]),
+      );
+    }
+    if (b.status == BookingStatus.onTheWay) {
+      return BottomActionBar(
+        top: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.sm),
+          child: Text(
+              'The expert has left. Cancelling now adds ₹100 to your next '
+              'booking.',
+              textAlign: TextAlign.center,
+              style: AppText.caption),
+        ),
+        child: PrimaryButton(
+          label: 'Need help? Chat with us',
+          icon: Icons.chat_outlined,
+          onPressed: () => openWhatsApp(context),
+        ),
+      );
+    }
+    return null;
   }
 
-  Future<void> _sendChange(BuildContext context, WidgetRef ref,
+  // ── Requests to the team ───────────────────────────────────────────────────
+  static Future<void> _send(BuildContext context, WidgetRef ref,
       BookingRecord booking, String request) async {
     try {
       await ref
           .read(bookingCloudProvider)
           .requestCustomerChange(booking, request);
+      ref.invalidate(customerCloudBookingsProvider);
       if (context.mounted) {
-        showMessage(context,
-            'Updated! Our operations team has noted your priority slot.');
+        showMessage(context, 'Request sent. We\'ll confirm in the app.');
       }
     } catch (_) {
-      if (context.mounted)
-        showMessage(context, 'Unable to update. Call our team.');
+      if (context.mounted) {
+        showMessage(
+            context, 'Couldn\'t send. Check your internet and try again.');
+      }
     }
   }
 
-  Future<void> _pickNewSlot(
+  /// Days (from tomorrow) and windows the customer can ask to move to.
+  static Future<void> _changeTime(
       BuildContext context, WidgetRef ref, BookingRecord booking) async {
-    DateTime selectedDay = DateTime.now().add(const Duration(days: 1));
-    TimeSlot? selectedSlot;
-
+    final today = dateOnly(DateTime.now());
+    final minutes = booking.serviceDurationMinutes;
+    final days = [
+      for (var i = 1; i <= 7; i++) addDays(today, i),
+    ]
+        .where((d) => timeSlots.any((s) =>
+            s.isAvailable(d) && canFinishByClose(s.startMinute, minutes)))
+        .take(5)
+        .toList();
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) {
-          final availableSlots =
-              timeSlots.where((s) => s.isAvailable(selectedDay)).toList();
-          return Padding(
-            padding: EdgeInsets.fromLTRB(AppSpace.page, 16, AppSpace.page,
-                20 + MediaQuery.viewInsetsOf(ctx).bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Select Priority Reschedule Slot', style: AppText.h3),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text('Pick an arrival window over the next 4 days:',
-                    style: AppText.caption),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 48,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 4,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (_, i) {
-                      final day = DateTime.now().add(Duration(days: i + 1));
-                      final isSel = day.year == selectedDay.year &&
-                          day.month == selectedDay.month &&
-                          day.day == selectedDay.day;
-                      return ChoiceChip(
-                        selected: isSel,
-                        label: Text(i == 0 ? 'Tomorrow' : friendlyDate(day)),
-                        onSelected: (_) => setState(() => selectedDay = day),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final s in availableSlots)
-                      ChoiceChip(
-                        selected: selectedSlot?.id == s.id,
-                        label: Text(s.short),
-                        onSelected: (_) => setState(() => selectedSlot = s),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                PrimaryButton(
-                  label: 'Confirm Reschedule',
-                  onPressed: selectedSlot == null
-                      ? null
-                      : () => Navigator.pop(
-                            ctx,
-                            'Rescheduled to  at ',
-                          ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+      showDragHandle: true,
+      builder: (ctx) => _ChangeTimeSheet(days: days, minutes: minutes),
     );
     if (picked != null && context.mounted) {
-      await _sendChange(context, ref, booking, picked);
+      await _send(context, ref, booking, picked);
     }
   }
 
-  // ── SCREEN 11: Cancellation & Reschedule Modal ──────────────────────────────
-  Future<void> _requestChange(
+  static Future<void> _cancel(
       BuildContext context, WidgetRef ref, BookingRecord booking) async {
-    int selectedReason = 0;
-    final reasons = [
-      'Change in personal schedule / traveling',
-      'Weather forecast looks rainy / overcast',
-      'Selected time slot no longer suitable',
-      'Got vehicle cleaned elsewhere',
-    ];
-
-    await showModalBottomSheet(
+    final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => Padding(
-          padding: EdgeInsets.fromLTRB(AppSpace.page, 16, AppSpace.page,
-              20 + MediaQuery.viewInsetsOf(ctx).bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Cancel or Reschedule', style: AppText.h2),
-                  IconButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      icon: const Icon(Icons.close_rounded)),
-                ],
-              ),
-              const SizedBox(height: 6),
-              // Summary bar
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('#${booking.ref} · Tomorrow, 9:30 - 10:30 AM',
-                              style: AppText.caption
-                                  .copyWith(fontWeight: FontWeight.w700)),
-                          Text(
-                              '${booking.serviceName} - ${booking.carModel.isNotEmpty ? booking.carModel : 'White Swift'}',
-                              style: AppText.caption
-                                  .copyWith(color: AppColors.textSubtle)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Urban Company Policy Banner
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F7EE),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.check_circle_rounded,
-                        color: AppColors.primary, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Free Cancellation Active: 100% free up to 4 hours before arrival window. Cancellations within 2 hours or after technician departs incurs ₹100 fee on your next booking.',
-                        style: AppText.caption
-                            .copyWith(color: AppColors.primaryDk, height: 1.35),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('Reason for cancellation', style: AppText.bodyStrong),
-              const SizedBox(height: 8),
-              for (var i = 0; i < reasons.length; i++)
-                RadioListTile<int>(
-                  value: i,
-                  groupValue: selectedReason,
-                  title: Text(reasons[i], style: AppText.small),
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  activeColor: AppColors.primary,
-                  onChanged: (v) => setState(() => selectedReason = v ?? 0),
-                ),
-              const SizedBox(height: 10),
-              // Help notice
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                        size: 16, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Need to change your plan? Avoid cancellation charges and keep your preferred lead detailer by moving your booking to another date or time for free.',
-                        style: AppText.caption.copyWith(height: 1.35),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              PrimaryButton(
-                label: 'Reschedule Booking (100% Free)',
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _sendChange(
-                      context, ref, booking, 'Requested free reschedule');
-                },
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton(
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: ctx,
-                      builder: (dCtx) => AlertDialog(
-                        title: const Text('Cancel this booking?'),
-                        content: Text(
-                          'Your reserved slot for  on  will be released.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dCtx, false),
-                            child: const Text('Keep Booking'),
-                          ),
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.error),
-                            onPressed: () => Navigator.pop(dCtx, true),
-                            child: const Text('Yes, Cancel'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm != true) return;
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (!context.mounted) return;
-
-                    final wallet = ref.read(walletProvider);
-                    final appliedTx = wallet.transactions
-                        .where(
-                          (t) => t.referenceId == booking.ref && t.amount < 0,
-                        )
-                        .firstOrNull;
-                    if (appliedTx != null) {
-                      await ref.read(walletProvider.notifier).refundCredit(
-                            appliedTx.amount.abs(),
-                            booking.ref,
-                          );
-                    }
-
-                    await _sendChange(context, ref, booking, 'Cancelled: ');
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Booking # cancelled.'),
-                          action: SnackBarAction(
-                            label: 'Undo',
-                            onPressed: () {
-                              _sendChange(context, ref, booking,
-                                  'Undo cancellation: re-opened');
-                            },
-                          ),
-                          duration: const Duration(seconds: 5),
-                        ),
-                      );
-                    }
-                  },
-                  child: Text(
-                    'Proceed to Cancel (Fee: ₹0)',
-                    style: AppText.bodyStrong.copyWith(color: AppColors.error),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      showDragHandle: true,
+      builder: (ctx) => const _CancelSheet(),
     );
+    if (result == null || !context.mounted) return;
+    if (result == _CancelSheet.changeInstead) {
+      return _changeTime(context, ref, booking);
+    }
+    // CleanCredit used on this booking goes back to the wallet, as before.
+    final wallet = ref.read(walletProvider);
+    final appliedTx = wallet.transactions
+        .where((t) => t.referenceId == booking.ref && t.amount < 0)
+        .firstOrNull;
+    if (appliedTx != null) {
+      await ref
+          .read(walletProvider.notifier)
+          .refundCredit(appliedTx.amount.abs(), booking.ref);
+    }
+    if (!context.mounted) return;
+    await _send(context, ref, booking, result);
   }
 }
 
-// ── SCREEN 12: Weather Hold Reschedule Component ──────────────────────────────
-class _WeatherHoldCard extends StatelessWidget {
-  final BookingRecord booking;
-  final VoidCallback onConfirmPriority;
-  final VoidCallback onPickOther;
-  const _WeatherHoldCard(
-      {required this.booking,
-      required this.onConfirmPriority,
-      required this.onPickOther});
+// ── Header ───────────────────────────────────────────────────────────────────
+class _Header extends StatelessWidget {
+  final String title, bookingRef;
+  const _Header({required this.title, required this.bookingRef});
 
   @override
   Widget build(BuildContext context) {
-    final parking = parkingOf(booking.address) ?? '';
-    final isCovered = parking.toLowerCase().contains('basement') ||
-        parking.toLowerCase().contains('covered') ||
-        parking.toLowerCase().contains('stilt');
-
-    if (isCovered) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-          boxShadow: AppShadow.card,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primarySoft,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.verified_rounded,
-                      color: AppColors.primary, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Rain in Sector 48 · Wash On Schedule',
-                        style: AppText.bodyStrong
-                            .copyWith(color: AppColors.primaryDk),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Good news! Because your car is in covered parking (${parking.isNotEmpty ? parking : "Basement"}), rain will not delay your appointment. Our detailer will arrive as planned.',
-                        style: AppText.caption
-                            .copyWith(color: AppColors.text, height: 1.35),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border:
-            Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
-        boxShadow: AppShadow.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFEF3C7),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.thunderstorm_rounded,
-                    color: Color(0xFFD97706), size: 24),
+    return Row(children: [
+      Semantics(
+        button: true,
+        label: 'Back to my bookings',
+        child: ExcludeSemantics(
+          child: Material(
+            color: AppColors.surface,
+            shape:
+                const CircleBorder(side: BorderSide(color: AppColors.border)),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () =>
+                  context.canPop() ? context.pop() : context.go('/bookings'),
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(Icons.arrow_back_rounded,
+                    size: 20, color: AppColors.text),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Service Paused: Heavy Rain in Sector 48',
-                      style: AppText.bodyStrong
-                          .copyWith(color: const Color(0xFF92400E)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Outdoor foam detailing is temporarily suspended to protect drying finish and technician safety. Your booking remains our top priority.',
-                      style: AppText.caption
-                          .copyWith(color: AppColors.text, height: 1.35),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: AppColors.border),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F7EE),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'PRIORITY RESCHEDULE · NO EXTRA CHARGE',
-                  style: AppText.overline.copyWith(
-                    color: AppColors.primaryDk,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text('Held Priority Slot:',
-                    style:
-                        AppText.caption.copyWith(color: AppColors.textSubtle)),
-                Text(
-                  'Wednesday, Nov 4 · 9:30 AM - 10:30 AM',
-                  style:
-                      AppText.bodyStrong.copyWith(color: AppColors.primaryDk),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Assigned: Rahul Sharma (Lead Detailer) · Van HR 26 DL 4821',
-                  style: AppText.caption.copyWith(color: AppColors.text),
-                ),
-              ],
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            'CleanCruisers Policy: Zero fee for weather reschedule. You inspect your ${booking.carModel.isNotEmpty ? booking.carModel : carTypeNames[booking.car]} after detailing and pay ${rupees(booking.payable)} via Cash or UPI on site.',
-            style: AppText.caption
-                .copyWith(color: AppColors.textSubtle, height: 1.35),
-          ),
-        ],
+        ),
       ),
-    );
+      const SizedBox(width: AppSpace.md),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Semantics(
+            header: true,
+            child: Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.h2),
+          ),
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: bookingRef));
+              showMessage(context, 'Booking ID copied');
+            },
+            child: Text('Booking $bookingRef', style: AppText.caption),
+          ),
+        ]),
+      ),
+    ]);
   }
 }
 
-/// Receipt for a completed booking, built from what was actually booked
-/// and collected (no invoice numbers or tax lines the app can't back up).
-class _Receipt extends StatelessWidget {
+// ── Status card, one look per state ──────────────────────────────────────────
+class _StatusCard extends StatelessWidget {
   final BookingRecord booking;
-  const _Receipt({required this.booking});
+  final CarService? service;
+  const _StatusCard({required this.booking, required this.service});
+
+  static const _muted = Color(0xFFB8C0C7);
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
+    final slot = slotById(b.slotId)?.short ?? b.slotLabel;
+    final arrival = b.confirmedArrivalLabel;
+    final (chip, tone) = statusChip(b);
+
+    switch (b.status) {
+      case BookingStatus.confirmed:
+      case BookingStatus.onTheWay:
+      case BookingStatus.inService:
+        final step = progressIndex(b.status) ?? 1;
+        return Container(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          decoration: BoxDecoration(
+            color: AppColors.ink,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$chip · ${friendlyDate(b.date)}'.toUpperCase(),
+                style: AppText.overline.copyWith(color: AppColors.brand)),
+            const SizedBox(height: AppSpace.md),
+            Text(
+                b.status == BookingStatus.onTheWay
+                    ? 'Your expert is on the way'
+                    : b.status == BookingStatus.inService
+                        ? 'Your car is being cleaned'
+                        : 'Your expert arrives',
+                style: AppText.small.copyWith(color: _muted)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(slot,
+                  style: AppText.display.copyWith(color: Colors.white)),
+            ),
+            if (arrival != null)
+              Text('Likely around $arrival',
+                  style: AppText.small.copyWith(color: _muted)),
+            const SizedBox(height: AppSpace.lg),
+            _DarkProgress(current: step),
+          ]),
+        );
+      case BookingStatus.requested:
+      case BookingStatus.teamReview:
+        return _LightCard(
+          border: const Color(0xFFF3D9A8),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Pill(chip, tone: tone),
+            const SizedBox(height: AppSpace.md),
+            Text('You asked for ${friendlyDate(b.date)}', style: AppText.small),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(slot, style: AppText.display),
+            ),
+            const SizedBox(height: 4),
+            Text(
+                b.customerNote ??
+                    'We usually confirm within $kConfirmUsually. '
+                        'You\'ll see it here.',
+                style: AppText.small),
+            const SizedBox(height: AppSpace.lg),
+            BookingProgress(status: b.status),
+          ]),
+        );
+      case BookingStatus.rescheduleNeeded:
+        return _LightCard(
+          border: const Color(0xFFF3D9A8),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.warningSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: const Icon(Icons.thunderstorm_outlined,
+                    color: AppColors.warning),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Flexible(child: Pill(chip, tone: tone)),
+            ]),
+            const SizedBox(height: AppSpace.md),
+            Text('Your slot needs a new time', style: AppText.h3),
+            const SizedBox(height: 4),
+            Text(
+                b.customerNote ??
+                    'Your wash on ${friendlyDate(b.date)}, $slot is on hold. '
+                        'Choose what works for you below.',
+                style: AppText.small),
+          ]),
+        );
+      case BookingStatus.completed:
+        final photo = service?.cardPhoto;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: SizedBox(
+            height: 170,
+            child: Stack(fit: StackFit.expand, children: [
+              if (photo != null)
+                Image.asset(photo,
+                    fit: BoxFit.cover,
+                    cacheWidth: 800,
+                    excludeFromSemantics: true)
+              else
+                const ColoredBox(color: AppColors.forest),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.3, 1],
+                    colors: [Color(0x000B0F10), Color(0xD90B0F10)],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: AppSpace.lg,
+                right: AppSpace.lg,
+                bottom: AppSpace.lg,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        child: Text(
+                            'DONE · ${friendlyDate(b.date)}'.toUpperCase(),
+                            style: AppText.overline
+                                .copyWith(color: AppColors.ink)),
+                      ),
+                      const SizedBox(height: AppSpace.sm),
+                      Text('All clean. Hope you love it.',
+                          style: AppText.h3.copyWith(color: Colors.white)),
+                    ]),
+              ),
+            ]),
+          ),
+        );
+      case BookingStatus.cancelled:
+      case BookingStatus.unableToServe:
+        return _LightCard(
+          border: AppColors.border,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Pill(chip, tone: tone),
+            const SizedBox(height: AppSpace.md),
+            Text(
+                b.status == BookingStatus.cancelled
+                    ? 'Booking cancelled'
+                    : 'We couldn\'t take this booking',
+                style: AppText.h3),
+            const SizedBox(height: 4),
+            Text(
+                b.customerNote ??
+                    '${friendlyDate(b.date)}, $slot. Nothing to pay.',
+                style: AppText.small),
+          ]),
+        );
+    }
+  }
+}
+
+class _LightCard extends StatelessWidget {
+  final Color border;
+  final Widget child;
+  const _LightCard({required this.border, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpace.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: border, width: 1.5),
+        ),
+        child: child,
+      );
+}
+
+/// Five steps with labels, for the dark status card.
+class _DarkProgress extends StatelessWidget {
+  final int current;
+  const _DarkProgress({required this.current});
+
+  static const _labels = [
+    'Requested',
+    'Confirmed',
+    'On the way',
+    'Cleaning',
+    'Done'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Step ${current + 1} of 5, ${_labels[current]}',
+      child: ExcludeSemantics(
+        child: Column(children: [
+          Row(children: [
+            for (var i = 0; i < 5; i++) ...[
+              if (i > 0)
+                Expanded(
+                  child: Container(
+                    height: 3,
+                    color: i <= current
+                        ? AppColors.brand
+                        : const Color(0xFF2A3336),
+                  ),
+                ),
+              Container(
+                width: i == current ? 16 : 11,
+                height: i == current ? 16 : 11,
+                decoration: BoxDecoration(
+                  color: i <= current ? AppColors.brand : null,
+                  shape: BoxShape.circle,
+                  border: i <= current
+                      ? null
+                      : Border.all(color: const Color(0xFF3A4448), width: 2),
+                ),
+              ),
+            ],
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            for (var i = 0; i < 5; i++)
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: i == 0
+                      ? Alignment.centerLeft
+                      : i == 4
+                          ? Alignment.centerRight
+                          : Alignment.center,
+                  child: Text(_labels[i],
+                      style: AppText.caption.copyWith(
+                          color: i == current
+                              ? Colors.white
+                              : const Color(0xFF8A949B),
+                          fontWeight: i == current
+                              ? FontWeight.w800
+                              : FontWeight.w600)),
+                ),
+              ),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Rain hold: the team's offer, covered parking, or another time ────────────
+class _HoldOptions extends StatelessWidget {
+  final BookingRecord booking;
+  final ValueChanged<String> onSend;
+  final VoidCallback onPickOther;
+  const _HoldOptions(
+      {required this.booking, required this.onSend, required this.onPickOther});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final offeredSlot = slotById(b.offeredSlotId);
+    final offer = b.offeredDate != null && offeredSlot != null
+        ? '${friendlyDate(b.offeredDate!)}, ${offeredSlot.short}'
+        : null;
+
+    Widget option(String title, String line, VoidCallback onTap,
+            {bool primary = false}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.sm),
+          child: AppCard(
+            onTap: onTap,
+            radius: AppRadius.lg,
+            selected: primary,
+            color: AppColors.surface,
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: AppText.title),
+                      Text(line, style: AppText.small),
+                    ]),
+              ),
+              if (primary)
+                const Pill('Held for you', tone: PillTone.solid)
+              else
+                const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.textSubtle),
+            ]),
+          ),
+        );
+
+    return Column(children: [
+      if (offer != null)
+        option('Take the new slot', offer,
+            () => onSend('Accept the offered slot: $offer'),
+            primary: true),
+      option('My car is in covered parking', 'Keep the wash as planned',
+          () => onSend('Covered parking: keep the wash as planned')),
+      option('Pick another day or time', 'Choose a time that suits you',
+          onPickOther),
+    ]);
+  }
+}
+
+class _ExpertRow extends StatelessWidget {
+  const _ExpertRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpace.md),
+      child: Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration:
+              const BoxDecoration(color: AppColors.ink, shape: BoxShape.circle),
+          child:
+              const Icon(Icons.person_outline_rounded, color: AppColors.brand),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Expert assigned', style: AppText.title),
+            Text('A CleanCruisers expert is booked for your slot',
+                style: AppText.small),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Where, which car, and the bill or receipt ────────────────────────────────
+class _Details extends StatelessWidget {
+  final BookingRecord booking;
+  const _Details({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final done = b.status == BookingStatus.completed;
     final paid = b.amountCollected ?? b.payable;
     final method = switch (b.paymentMethod) {
       PaymentMethod.cash => 'Cash',
@@ -1025,16 +725,43 @@ class _Receipt extends StatelessWidget {
                     color: green ? AppColors.primaryDk : AppColors.text)),
           ]),
         );
+    Widget place(IconData icon, String title, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.md),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 18, color: AppColors.textMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppText.smallStrong),
+                    Text(text, style: AppText.small),
+                  ]),
+            ),
+          ]),
+        );
+
     return AppCard(
+      radius: AppRadius.lg,
+      padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        place(Icons.location_on_outlined, 'Car parked at', b.address),
+        place(Icons.directions_car_outlined, b.carLabel,
+            '${friendlyDate(b.date)}, ${slotById(b.slotId)?.short ?? b.slotLabel}'),
+        if (b.forSomeoneElse && b.recipientName != null)
+          place(Icons.person_outline_rounded, 'At the car',
+              '${b.recipientName}${b.recipientPhone == null ? '' : ' · ${phoneLabel(b.recipientPhone!)}'}'),
+        const Divider(height: AppSpace.lg),
         Row(children: [
-          Expanded(child: Text('RECEIPT · ${b.ref}', style: AppText.overline)),
-          if (method != null)
+          Expanded(
+              child: Text(done ? 'Receipt' : 'Bill', style: AppText.title)),
+          if (done && method != null)
             Pill('Paid · $method',
                 icon: Icons.check_rounded, tone: PillTone.brand),
         ]),
-        const Divider(height: AppSpace.xl),
-        line(b.serviceName, rupees(b.servicePrice)),
+        const SizedBox(height: AppSpace.sm),
+        line(serviceById(b.serviceId)?.listName ?? b.serviceName,
+            rupees(b.servicePrice)),
         for (final (name, qty, price) in b.extras)
           line(qty > 1 ? '$name × $qty' : name, rupees(price)),
         if (b.couponDiscount > 0)
@@ -1045,11 +772,247 @@ class _Receipt extends StatelessWidget {
         const Divider(height: AppSpace.lg),
         Row(children: [
           Expanded(
-              child: Text(method == null ? 'To pay' : 'Paid',
-                  style: AppText.bodyStrong)),
-          Text(rupees(paid), style: AppText.priceSm),
+            child: Text(
+                done
+                    ? 'Paid'
+                    : kPayAfterService
+                        ? 'Pay after the service'
+                        : 'To pay',
+                style: AppText.bodyStrong),
+          ),
+          Text(rupees(done ? paid : b.payable), style: AppText.priceSm),
         ]),
+        if (!done && kPayAfterService)
+          Text('Cash or UPI to the expert', style: AppText.caption),
       ]),
+    );
+  }
+}
+
+// ── Status history, newest first ─────────────────────────────────────────────
+class _Updates extends StatelessWidget {
+  final BookingRecord booking;
+  const _Updates({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final events = [...booking.history]..sort((a, b) => b.at.compareTo(a.at));
+    if (events.isEmpty) return const SizedBox.shrink();
+    return AppCard(
+      radius: AppRadius.lg,
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Updates', style: AppText.title),
+        const SizedBox(height: AppSpace.md),
+        for (var i = 0; i < events.length; i++)
+          IntrinsicHeight(
+            child:
+                Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Column(children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  margin: const EdgeInsets.only(top: 5),
+                  decoration: BoxDecoration(
+                    color: i == 0 ? AppColors.primary : const Color(0xFFC9CED3),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (i < events.length - 1)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: AppColors.border,
+                    ),
+                  ),
+              ]),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                      bottom: i < events.length - 1 ? AppSpace.md : 0),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(events[i].status.label,
+                            style: AppText.smallStrong.copyWith(
+                                color: i == 0
+                                    ? AppColors.text
+                                    : AppColors.textMuted)),
+                        Text(
+                            '${friendlyDate(events[i].at)}, '
+                            '${clockLabel(events[i].at.hour * 60 + events[i].at.minute)}'
+                            '${events[i].note == null ? '' : ' · ${events[i].note}'}',
+                            style: AppText.caption),
+                      ]),
+                ),
+              ),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+// ── Change time: a request with the day and window chosen ────────────────────
+class _ChangeTimeSheet extends StatefulWidget {
+  final List<DateTime> days;
+  final int minutes;
+  const _ChangeTimeSheet({required this.days, required this.minutes});
+
+  @override
+  State<_ChangeTimeSheet> createState() => _ChangeTimeSheetState();
+}
+
+class _ChangeTimeSheetState extends State<_ChangeTimeSheet> {
+  late DateTime? _day = widget.days.firstOrNull;
+  TimeSlot? _slot;
+
+  @override
+  Widget build(BuildContext context) {
+    final day = _day;
+    final slots = day == null
+        ? const <TimeSlot>[]
+        : timeSlots
+            .where((s) =>
+                s.isAvailable(day) &&
+                canFinishByClose(s.startMinute, widget.minutes))
+            .toList();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpace.page, 0, AppSpace.page, AppSpace.lg),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Change the time', style: AppText.h2),
+              const SizedBox(height: 4),
+              Text(
+                  'We\'ll check it and confirm in the app. Free until 4 hours '
+                  'before your slot.',
+                  style: AppText.small),
+              const SizedBox(height: AppSpace.lg),
+              Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+                for (final d in widget.days)
+                  ChoiceChip(
+                    label: Text(friendlyDate(d)),
+                    selected: d == _day,
+                    showCheckmark: false,
+                    selectedColor: AppColors.ink,
+                    labelStyle: AppText.smallStrong.copyWith(
+                        color: d == _day ? Colors.white : AppColors.text),
+                    onSelected: (_) => setState(() {
+                      _day = d;
+                      _slot = null;
+                    }),
+                  ),
+              ]),
+              const SizedBox(height: AppSpace.lg),
+              Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+                for (final s in slots)
+                  ChoiceChip(
+                    label: Text(s.short),
+                    selected: s.id == _slot?.id,
+                    showCheckmark: false,
+                    selectedColor: AppColors.primary,
+                    labelStyle: AppText.smallStrong.copyWith(
+                        color:
+                            s.id == _slot?.id ? Colors.white : AppColors.text),
+                    onSelected: (_) => setState(() => _slot = s),
+                  ),
+              ]),
+              const SizedBox(height: AppSpace.xl),
+              PrimaryButton(
+                label: 'Request this time',
+                onPressed: day == null || _slot == null
+                    ? null
+                    : () => Navigator.pop(context,
+                        'Change time to ${friendlyDate(day)}, ${_slot!.short}'),
+              ),
+            ]),
+      ),
+    );
+  }
+}
+
+// ── Cancel: policy, optional reason, and a nudge to change the time ──────────
+class _CancelSheet extends StatefulWidget {
+  const _CancelSheet();
+
+  /// Returned when the customer would rather move the booking.
+  static const changeInstead = '__change__';
+
+  @override
+  State<_CancelSheet> createState() => _CancelSheetState();
+}
+
+class _CancelSheetState extends State<_CancelSheet> {
+  static const _reasons = [
+    'Plans changed',
+    'Car not available',
+    'Booked by mistake',
+    'Other',
+  ];
+  String? _reason;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpace.page, 0, AppSpace.page, AppSpace.lg),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Cancel this booking?', style: AppText.h2),
+              const SizedBox(height: AppSpace.md),
+              const NoticeBox(
+                icon: Icons.info_outline_rounded,
+                text: 'Free to cancel until 4 hours before your slot. '
+                    'Cancelling within 2 hours of your slot, or after the '
+                    'expert has left, adds ₹100 to your next booking.',
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Text('Why are you cancelling? (optional)',
+                  style: AppText.smallStrong),
+              const SizedBox(height: AppSpace.sm),
+              Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+                for (final r in _reasons)
+                  ChoiceChip(
+                    label: Text(r),
+                    selected: r == _reason,
+                    showCheckmark: false,
+                    selectedColor: AppColors.ink,
+                    labelStyle: AppText.smallStrong.copyWith(
+                        color: r == _reason ? Colors.white : AppColors.text),
+                    onSelected: (_) => setState(() => _reason = r),
+                  ),
+              ]),
+              const SizedBox(height: AppSpace.xl),
+              PrimaryButton(
+                label: 'Change the time instead',
+                onPressed: () =>
+                    Navigator.pop(context, _CancelSheet.changeInstead),
+              ),
+              const SizedBox(height: AppSpace.sm),
+              TextButton(
+                onPressed: () => Navigator.pop(
+                    context,
+                    _reason == null
+                        ? 'Cancel this booking'
+                        : 'Cancel this booking: $_reason'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  minimumSize: const Size(0, 48),
+                  textStyle: AppText.bodyStrong,
+                ),
+                child: const Text('Yes, request cancellation'),
+              ),
+            ]),
+      ),
     );
   }
 }

@@ -75,6 +75,19 @@ Map<String, Object> repeatPrefs() => {
       ]),
     };
 
+/// Rain hold: the team offers another slot and leaves a note.
+Map<String, Object> holdPrefs() => {
+      ...profile,
+      'bookings_v1': jsonEncode([
+        {
+          ..._booking,
+          'status': 'rescheduleNeeded',
+          'offeredDate': addDays(DateTime.now(), 2).toIso8601String(),
+          'offeredSlotId': '0930',
+        }
+      ]),
+    };
+
 /// Saved car + address: the flow opens on the time step. Pick a slot.
 Future<void> toSlot(WidgetTester t) async {
   await t.tap(find.text('Tmrw'));
@@ -142,8 +155,23 @@ void main() {
   both('sent', const BookingSentScreen(bookingRef: 'CC-7K4Q2X9M'), 1000,
       prefs: bookingPrefs(confirmed: false));
   both('bookings', const BookingsScreen(), 800, prefs: bookingPrefs());
+  both('bookings_past', const BookingsScreen(), 800, prefs: repeatPrefs(),
+      interact: (t) async {
+    await t.tap(find.textContaining('Past'));
+    await t.pump(const Duration(milliseconds: 300));
+  });
+  both('bookings_empty', const BookingsScreen(), 800, prefs: profile);
   both('detail', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
       prefs: bookingPrefs());
+  both('detail_waiting', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'),
+      1700,
+      prefs: bookingPrefs(confirmed: false));
+  both(
+      'detail_done', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
+      prefs: repeatPrefs());
+  both(
+      'detail_hold', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
+      prefs: holdPrefs());
   both('profile', const ProfileScreen(), 2000, prefs: profile);
   both('wallet', const WalletScreen(), 1400, prefs: profile);
 }

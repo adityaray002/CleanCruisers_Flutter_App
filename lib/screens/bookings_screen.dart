@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
+import '../core/pricing.dart';
 import '../core/theme.dart';
+import '../data/business_info.dart';
 import '../models/booking.dart';
+import '../models/service.dart';
 import '../providers/app_providers.dart';
+import '../widgets/booking_progress.dart';
 import '../widgets/ui.dart';
 
-/// Screen 09: Customer Portal · My Bookings Dashboard
-/// Matching exact mockup with Segmented Tabs: [Upcoming (2)] [Past Bookings (1)],
-/// Amber "REQUESTED" card, Green "CONFIRMED" card, and Past completed invoice cards.
+/// My bookings (v3 design): Upcoming and Past tabs. Upcoming shows one card
+/// per booking with its status, when the expert comes and progress dots;
+/// Past is a list with "Book again" on finished washes. Each tab has its own
+/// empty state.
 class BookingsScreen extends ConsumerStatefulWidget {
   const BookingsScreen({super.key});
 
@@ -18,7 +24,7 @@ class BookingsScreen extends ConsumerStatefulWidget {
 }
 
 class _BookingsScreenState extends ConsumerState<BookingsScreen> {
-  int _selectedTab = 0; // 0 = Upcoming, 1 = Past Bookings
+  bool _past = false;
 
   @override
   Widget build(BuildContext context) {
@@ -29,404 +35,356 @@ class _BookingsScreenState extends ConsumerState<BookingsScreen> {
       ..sort((a, b) => a.date.compareTo(b.date));
     final past = all.where((b) => !b.isUpcoming() || b.status.isFinal).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
+    final list = _past ? past : upcoming;
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'CUSTOMER PORTAL',
-                  style: AppText.overline.copyWith(
-                    color: AppColors.primaryDk,
-                    letterSpacing: 1.1,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    '${upcoming.length} Active',
-                    style: AppText.caption.copyWith(
-                      color: AppColors.primaryDk,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'My Bookings',
-              style: AppText.h1,
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          // Segmented Tabs
-          Padding(
-            padding:
-                const EdgeInsets.fromLTRB(AppSpace.page, 10, AppSpace.page, 14),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: Row(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark
+          .copyWith(statusBarColor: Colors.transparent),
+      child: Scaffold(
+        backgroundColor: AppColors.bg,
+        body: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.15,
+          child: SafeArea(
+            bottom: false,
+            child: RefreshIndicator(
+              onRefresh: () async =>
+                  ref.invalidate(customerCloudBookingsProvider),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.xxl),
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedTab = 0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _selectedTab == 0
-                              ? Colors.white
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                          boxShadow: _selectedTab == 0 ? AppShadow.card : null,
-                        ),
-                        child: Text(
-                          'Upcoming (${upcoming.length})',
-                          textAlign: TextAlign.center,
-                          style: AppText.smallStrong.copyWith(
-                            color: _selectedTab == 0
-                                ? AppColors.text
-                                : AppColors.textSubtle,
-                            fontWeight: _selectedTab == 0
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                  Semantics(
+                    header: true,
+                    child: Text('My bookings', style: AppText.h1),
                   ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedTab = 1),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _selectedTab == 1
-                              ? Colors.white
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                          boxShadow: _selectedTab == 1 ? AppShadow.card : null,
-                        ),
-                        child: Text(
-                          'Past Bookings (${past.length})',
-                          textAlign: TextAlign.center,
-                          style: AppText.smallStrong.copyWith(
-                            color: _selectedTab == 1
-                                ? AppColors.text
-                                : AppColors.textSubtle,
-                            fontWeight: _selectedTab == 1
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                  const SizedBox(height: AppSpace.lg),
+                  _Tabs(
+                    past: _past,
+                    upcomingCount: upcoming.length,
+                    pastCount: past.length,
+                    onChanged: (v) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _past = v);
+                    },
                   ),
+                  const SizedBox(height: AppSpace.lg),
+                  if (list.isEmpty)
+                    _Empty(past: _past, firstBooking: all.isEmpty)
+                  else if (!_past)
+                    for (final b in list) ...[
+                      _UpcomingCard(booking: b),
+                      const SizedBox(height: AppSpace.md),
+                    ]
+                  else
+                    AppCard(
+                      radius: AppRadius.lg,
+                      padding: EdgeInsets.zero,
+                      child: Column(children: [
+                        for (var i = 0; i < list.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          _PastRow(booking: list[i]),
+                        ],
+                      ]),
+                    ),
                 ],
               ),
             ),
           ),
-
-          // List content
-          Expanded(
-            child: _selectedTab == 0
-                ? (upcoming.isEmpty
-                    ? Center(
-                        child: EmptyState(
-                          icon: Icons.event_note_rounded,
-                          title: 'No active bookings',
-                          message:
-                              'Your scheduled doorstep appointments will show up here.',
-                          action: PrimaryButton(
-                            label: 'Book a service',
-                            expand: false,
-                            onPressed: () => context.go('/services'),
-                          ),
-                        ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(
-                            AppSpace.page, 4, AppSpace.page, 24),
-                        children: [
-                          for (final b in upcoming)
-                            _MockupBookingCard(b: b, isPast: false),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.verified_outlined,
-                                    size: 18, color: AppColors.primary),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'CleanCruisers verifies worker routes and capacity before marking any appointment as Confirmed.',
-                                    style: AppText.caption
-                                        .copyWith(color: AppColors.textMuted),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ))
-                : (past.isEmpty
-                    ? Center(
-                        child: EmptyState(
-                          icon: Icons.history_rounded,
-                          title: 'No past bookings',
-                          message:
-                              'Completed services and tax invoices will be archived here.',
-                          action: PrimaryButton(
-                            label: 'Book a service',
-                            expand: false,
-                            onPressed: () => context.go('/services'),
-                          ),
-                        ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(
-                            AppSpace.page, 4, AppSpace.page, 24),
-                        children: [
-                          for (final b in past)
-                            _MockupBookingCard(b: b, isPast: true),
-                        ],
-                      )),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _MockupBookingCard extends StatelessWidget {
-  final BookingRecord b;
-  final bool isPast;
-  const _MockupBookingCard({required this.b, required this.isPast});
+class _Tabs extends StatelessWidget {
+  final bool past;
+  final int upcomingCount, pastCount;
+  final ValueChanged<bool> onChanged;
+  const _Tabs({
+    required this.past,
+    required this.upcomingCount,
+    required this.pastCount,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isRequested = b.status == BookingStatus.requested;
-    final isConfirmed = b.status == BookingStatus.confirmed ||
-        b.status == BookingStatus.onTheWay ||
-        b.status == BookingStatus.inService;
-
-    final borderColor = isRequested
-        ? const Color(0xFFF59E0B)
-        : (isConfirmed ? AppColors.primary : AppColors.border);
+    Widget tab(String label, bool value) {
+      final on = past == value;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: on,
+          label: label,
+          child: ExcludeSemantics(
+            child: GestureDetector(
+              onTap: () => onChanged(value),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: on ? AppColors.surface : null,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  boxShadow: on
+                      ? const [
+                          BoxShadow(
+                              color: Color(0x290B0F10),
+                              blurRadius: 3,
+                              offset: Offset(0, 1))
+                        ]
+                      : null,
+                ),
+                child: Text(label,
+                    style: AppText.bodyStrong.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: on ? AppColors.text : AppColors.textMuted)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFE9ECEF),
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border:
-            Border.all(color: borderColor.withValues(alpha: 0.35), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isRequested
-                  ? const Color(0xFFFFFBEB)
-                  : (isConfirmed
-                      ? const Color(0xFFF0FDF4)
-                      : AppColors.surfaceAlt),
-              borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.md - 1)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      isPast
-                          ? 'COMPLETED · ${monthShort(b.date).toUpperCase()} ${b.date.day}'
-                          : (isRequested
-                              ? 'PREFERRED · ${monthShort(b.date).toUpperCase()} ${b.date.day}'
-                              : 'CONFIRMED · ${monthShort(b.date).toUpperCase()} ${b.date.day}'),
-                      style: AppText.overline.copyWith(
-                        color: isRequested
-                            ? const Color(0xFFB45309)
-                            : (isConfirmed
-                                ? AppColors.primaryDk
-                                : AppColors.textSubtle),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isRequested
-                        ? const Color(0xFFFEF3C7)
-                        : (isConfirmed
-                            ? AppColors.primarySoft
-                            : const Color(0xFFE5E7EB)),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: isRequested
-                          ? const Color(0xFFF59E0B)
-                          : (isConfirmed
-                              ? AppColors.primary
-                              : const Color(0xFF9CA3AF)),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Text(
-                    isPast
-                        ? 'COMPLETED'
-                        : (isRequested ? 'REQUESTED' : '✓ CONFIRMED'),
-                    style: AppText.caption.copyWith(
-                      color: isRequested
-                          ? const Color(0xFF92400E)
-                          : (isConfirmed
-                              ? AppColors.primaryDk
-                              : AppColors.text),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+      child: Row(children: [
+        tab('Upcoming · $upcomingCount', false),
+        tab('Past · $pastCount', true),
+      ]),
+    );
+  }
+}
 
-          // Body Content
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(b.serviceName, style: AppText.h3),
-                const SizedBox(height: 2),
-                Text(
-                  '${b.ref} · ${b.carLabel}',
-                  style: AppText.caption.copyWith(color: AppColors.textMuted),
+/// Status chip colours and words, shared by the list and the detail page.
+(String, PillTone) statusChip(BookingRecord b) => switch (b.status) {
+      BookingStatus.requested => ('Waiting for confirmation', PillTone.warning),
+      BookingStatus.teamReview => ('Team checking', PillTone.warning),
+      BookingStatus.confirmed => ('Confirmed', PillTone.brand),
+      BookingStatus.onTheWay => ('On the way', PillTone.brand),
+      BookingStatus.inService => ('Cleaning now', PillTone.brand),
+      BookingStatus.rescheduleNeeded => ('Pick a new time', PillTone.warning),
+      BookingStatus.completed => ('Done', PillTone.brand),
+      BookingStatus.cancelled => ('Cancelled', PillTone.neutral),
+      BookingStatus.unableToServe => ('Couldn\'t take it', PillTone.neutral),
+    };
+
+class _UpcomingCard extends StatelessWidget {
+  final BookingRecord booking;
+  const _UpcomingCard({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final (chip, tone) = statusChip(b);
+    final service = serviceById(b.serviceId);
+    final arrival = b.confirmedArrivalLabel;
+    final line = [
+      if (arrival != null) 'Likely around $arrival',
+      service?.listName ?? b.serviceName,
+      b.carModel.trim().isEmpty ? carTypeNames[b.car]! : b.carModel.trim(),
+    ].join(' · ');
+    final waiting = b.status == BookingStatus.requested ||
+        b.status == BookingStatus.teamReview;
+
+    return Semantics(
+      button: true,
+      label: '$chip, ${friendlyDate(b.date)}. ${progressHeadline(b)}. $line. '
+          'Open booking',
+      child: ExcludeSemantics(
+        child: AppCard(
+          radius: AppRadius.lg,
+          onTap: () => context.push('/bookings/${b.ref}'),
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Flexible(child: Pill(chip, tone: tone)),
+              const SizedBox(width: AppSpace.sm),
+              const Spacer(),
+              Text(friendlyDate(b.date), style: AppText.caption),
+            ]),
+            const SizedBox(height: AppSpace.sm),
+            Text(progressHeadline(b), style: AppText.h3),
+            const SizedBox(height: 2),
+            Text(line, style: AppText.small),
+            if (waiting) ...[
+              const SizedBox(height: AppSpace.md),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpace.md),
+                decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      isRequested
-                          ? Icons.schedule_rounded
-                          : Icons.check_circle_outline_rounded,
-                      size: 16,
-                      color: isRequested
-                          ? const Color(0xFFD97706)
-                          : AppColors.primary,
+                child: Text(
+                    'We usually confirm within $kConfirmUsually. '
+                    'You\'ll see it here.',
+                    style: AppText.caption),
+              ),
+            ] else if (progressIndex(b.status) != null) ...[
+              const SizedBox(height: AppSpace.md),
+              BookingProgress(status: b.status, showLabels: false),
+            ],
+            if (b.customerChangeRequest != null) ...[
+              const SizedBox(height: AppSpace.md),
+              Text('Change requested. We\'ll confirm in the app.',
+                  style: AppText.caption.copyWith(color: AppColors.warning)),
+            ],
+            const Divider(height: AppSpace.xl),
+            Row(children: [
+              Expanded(
+                child: Text(
+                    '${rupees(b.payable)}${kPayAfterService ? ' · pay after' : ''}',
+                    style: AppText.small),
+              ),
+              Text('View details',
+                  style:
+                      AppText.smallStrong.copyWith(color: AppColors.primary)),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: AppColors.primary),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _PastRow extends StatelessWidget {
+  final BookingRecord booking;
+  const _PastRow({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final service = serviceById(b.serviceId);
+    final photo = service?.cardPhoto;
+    final done = b.status == BookingStatus.completed;
+    final (chip, _) = statusChip(b);
+    final status = done ? 'Done · paid' : chip;
+    final meta = [
+      friendlyDate(b.date),
+      b.carModel.trim().isEmpty ? carTypeNames[b.car]! : b.carModel.trim(),
+      if (done) rupees(b.amountCollected ?? b.payable),
+    ].join(' · ');
+
+    return Row(children: [
+      Expanded(
+        child: Semantics(
+          button: true,
+          label: '${service?.listName ?? b.serviceName}. $meta. $status. Open',
+          child: ExcludeSemantics(
+            child: InkWell(
+              onTap: () => context.push('/bookings/${b.ref}'),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.md, AppSpace.md, AppSpace.sm, AppSpace.md),
+                child: Row(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.thumb),
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: photo != null
+                          ? Image.asset(photo,
+                              fit: BoxFit.cover,
+                              cacheWidth: 200,
+                              excludeFromSemantics: true)
+                          : const ColoredBox(
+                              color: AppColors.primarySoft,
+                              child: Icon(Icons.local_car_wash_rounded,
+                                  color: AppColors.primary),
+                            ),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        isPast
-                            ? 'Completed at 11:45 AM · Rahul Sharma'
-                            : (isRequested
-                                ? 'Preferred Window: ${b.slotLabel} · Awaiting Team Confirmation'
-                                : 'Arrival: ${b.slotLabel} · Rahul Assigned (Van HR 26)'),
-                        style: AppText.small.copyWith(
-                          color: isRequested
-                              ? const Color(0xFF92400E)
-                              : AppColors.text,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const Divider(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isPast ? 'Total Paid' : 'Pay after service',
-                          style: AppText.caption
-                              .copyWith(color: AppColors.textSubtle),
-                        ),
-                        Text(
-                          rupees(b.payable),
-                          style: AppText.priceSm.copyWith(
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ],
-                    ),
-                    ElevatedButton(
-                      onPressed: () => context.push('/bookings/${b.ref}'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isRequested
-                            ? const Color(0xFFD97706)
-                            : AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                  ),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            isPast
-                                ? 'View Invoice →'
-                                : (isRequested
-                                    ? 'Track Request →'
-                                    : 'View Details →'),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                          Text(service?.listName ?? b.serviceName,
+                              style: AppText.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          Text(meta, style: AppText.caption),
+                          Text(status,
+                              style: AppText.caption.copyWith(
+                                  color: done
+                                      ? AppColors.primaryDk
+                                      : AppColors.textSubtle,
+                                  fontWeight: FontWeight.w800)),
+                        ]),
+                  ),
+                ]),
+              ),
             ),
           ),
-        ],
+        ),
       ),
+      if (done && service != null)
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpace.md),
+          child: OutlinedButton(
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              context.push('/book/${service.id}?car=${b.car.name}');
+            },
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary, width: 1.5),
+              textStyle: AppText.smallStrong,
+            ),
+            child: const Text('Book again'),
+          ),
+        ),
+    ]);
+  }
+}
+
+class _Empty extends StatelessWidget {
+  final bool past, firstBooking;
+  const _Empty({required this.past, required this.firstBooking});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.section),
+      child: Column(children: [
+        Container(
+          width: 104,
+          height: 104,
+          decoration: const BoxDecoration(
+              color: AppColors.primarySoft, shape: BoxShape.circle),
+          child: const Icon(Icons.event_note_rounded,
+              size: 44, color: AppColors.primary),
+        ),
+        const SizedBox(height: AppSpace.xl),
+        Text(past ? 'Nothing here yet' : 'No bookings yet',
+            style: AppText.h2, textAlign: TextAlign.center),
+        const SizedBox(height: AppSpace.sm),
+        Text(
+            past
+                ? 'Your finished washes show up here, with the bill.'
+                : 'Your washes show up here, with the time\n'
+                    'your expert arrives and the bill.',
+            textAlign: TextAlign.center,
+            style: AppText.body),
+        const SizedBox(height: AppSpace.xl),
+        PrimaryButton(
+          label: 'Book a wash',
+          icon: Icons.arrow_forward_rounded,
+          expand: false,
+          onPressed: () => context.go('/services?cat=wash'),
+        ),
+      ]),
     );
   }
 }
