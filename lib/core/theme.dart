@@ -61,9 +61,10 @@ class AppShadow {
   ];
 }
 
-/// Type scale (Manrope). Spec: hero 30/800 (36 line), screen 24/700,
-/// section 22/700, card title 18/700, price 24/800, button 16/700, body 14/400,
-/// secondary 13/400, labels 12/600, bottom nav 12/500.
+/// Type scale (Manrope), size/line-height: Home hero 32/38 800, display
+/// 30/36 800, screen 24/30 800, section 20/26 800, card 16/22 700,
+/// price 22/28 800, button 16/700, body 14/20 400, secondary 13/400,
+/// labels 12/600, bottom nav 12/16 600.
 /// Recolour with `copyWith(color: …)`; don't build new TextStyles.
 class AppText {
   static TextStyle _f(double size, FontWeight w, Color c,
@@ -75,21 +76,25 @@ class AppText {
           height: h,
           letterSpacing: ls);
 
-  /// Hero headings.
+  /// The Home hero headline: the strongest text in the app.
+  static TextStyle get hero =>
+      _f(32, FontWeight.w800, AppColors.text, h: 38 / 32, ls: -0.8);
+
+  /// Big headings (dark status cards, sign-in hero, splash).
   static TextStyle get display =>
-      _f(30, FontWeight.w800, AppColors.text, h: 1.2, ls: -0.6);
+      _f(30, FontWeight.w800, AppColors.text, h: 36 / 30, ls: -0.6);
 
   /// Screen headings.
   static TextStyle get h1 =>
-      _f(24, FontWeight.w700, AppColors.text, h: 1.25, ls: -0.4);
+      _f(24, FontWeight.w800, AppColors.text, h: 30 / 24, ls: -0.4);
 
   /// Section headings.
   static TextStyle get h2 =>
-      _f(22, FontWeight.w700, AppColors.text, h: 1.27, ls: -0.3);
+      _f(20, FontWeight.w800, AppColors.text, h: 26 / 20, ls: -0.3);
 
-  /// Card titles.
+  /// Card titles and step headings.
   static TextStyle get h3 =>
-      _f(18, FontWeight.w700, AppColors.text, h: 1.33, ls: -0.2);
+      _f(16, FontWeight.w700, AppColors.text, h: 22 / 16, ls: -0.2);
 
   /// Titles of compact cards and tiles.
   static TextStyle get title =>
@@ -97,7 +102,7 @@ class AppText {
 
   /// Body text.
   static TextStyle get body =>
-      _f(14, FontWeight.w400, AppColors.textMuted, h: 1.55);
+      _f(14, FontWeight.w400, AppColors.textMuted, h: 20 / 14);
   static TextStyle get bodyStrong =>
       _f(14, FontWeight.w600, AppColors.text, h: 1.45);
 
@@ -117,7 +122,7 @@ class AppText {
 
   /// Prices.
   static TextStyle get price =>
-      _f(24, FontWeight.w800, AppColors.text, h: 1.2, ls: -0.4);
+      _f(22, FontWeight.w800, AppColors.text, h: 28 / 22, ls: -0.4);
 
   /// Prices inside dense rows and tiles, where 24 would crowd the layout.
   static TextStyle get priceSm =>
@@ -128,7 +133,7 @@ class AppText {
 
   /// Bottom navigation labels.
   static TextStyle get nav =>
-      _f(12, FontWeight.w500, AppColors.textSubtle, h: 1.35);
+      _f(12, FontWeight.w600, AppColors.textSubtle, h: 16 / 12);
 }
 
 class AppTheme {

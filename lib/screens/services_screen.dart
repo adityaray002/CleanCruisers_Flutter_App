@@ -564,7 +564,7 @@ class _PickBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${rupees(s.priceFor(car))}${s.priceSuffix}',
-                    style: AppText.price.copyWith(fontSize: 22)),
+                    style: AppText.price),
                 Text('${s.listName} · ${carTypeNames[car]}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

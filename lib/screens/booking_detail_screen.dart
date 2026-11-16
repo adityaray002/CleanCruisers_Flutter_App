@@ -159,7 +159,7 @@ class BookingDetailScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(rupees(service.priceFor(b.car)),
-                  style: AppText.price.copyWith(fontSize: 22)),
+                  style: AppText.price),
               Text('today\'s price', style: AppText.caption),
             ],
           ),

@@ -246,7 +246,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(price, style: AppText.price.copyWith(fontSize: 22)),
+                  Text(price, style: AppText.price),
                   Text(
                       '${carTypeNames[car]}'
                       '${kPayAfterService ? ' · pay after' : ''}',

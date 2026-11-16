@@ -251,9 +251,17 @@ class _Hero extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Semantics(
               header: true,
-              child: Text('A spotless car, right where it\'s parked',
-                  style:
-                      AppText.h2.copyWith(color: Colors.white, height: 1.15)),
+              // Always two lines. 32px is already large text, so it isn't
+              // scaled up; on narrow phones it shrinks just enough to fit
+              // instead of going to three lines over the photo.
+              child: MediaQuery.withNoTextScaling(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('A spotless car, right\nwhere it\'s parked',
+                      style: AppText.hero.copyWith(color: Colors.white)),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [

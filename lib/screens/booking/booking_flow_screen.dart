@@ -702,7 +702,7 @@ class _Bar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: priceSmall
                         ? AppText.title
-                        : AppText.price.copyWith(fontSize: 22)),
+                        : AppText.price),
               ),
               Text(line,
                   maxLines: 1,

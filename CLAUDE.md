@@ -55,23 +55,24 @@ All tokens are static Dart constants. There is no token pipeline (no Style Dicti
 
 ### Typography: `AppText` (Manrope)
 
-| Style | Size / weight | Use |
+| Style | Size / line / weight | Use |
 |---|---|---|
-| `display` | 30 / 800, line 36 | Hero headings |
-| `h1` | 24 / 700 | Screen headings |
-| `h2` | 22 / 700 | Section headings |
-| `h3` | 18 / 700 | Card titles, step headings |
+| `hero` | 32 / 38 / 800 | The Home hero headline only: the strongest text in the app (not text-scaled, fixed two lines, shrinks to fit narrow phones) |
+| `display` | 30 / 36 / 800 | Big headings: dark status cards, sign-in hero, splash |
+| `h1` | 24 / 30 / 800 | Screen headings |
+| `h2` | 20 / 26 / 800 | Section headings, sheet titles |
+| `h3` | 16 / 22 / 700 | Card titles, step headings |
 | `title` | 16 / 600 | Titles of compact cards and tiles |
-| `body`, `bodyStrong` | 14 / 400, 600 | Body text, emphasised values |
-| `small`, `smallStrong` | 13 / 400, 600 | Secondary text |
+| `body`, `bodyStrong` | 14 / 20 / 400, 600 | Body text, emphasised values |
+| `small`, `smallStrong` | 13 / 400, 600 | Secondary text, service descriptions |
 | `caption` | 12 / 600 | Small labels |
 | `overline` | 12 / 600, tracking 1.0 | ALL-CAPS labels |
-| `price` | 24 / 800 | Prices |
+| `price` | 22 / 28 / 800 | Prices (bottom bars, bills) |
 | `priceSm` | 18 / 800 | Prices inside dense rows and tiles |
-| `button` | 16 / 700 white | Set by the button themes |
-| `nav` | 12 / 500 | Bottom navigation labels (set by the theme) |
+| `button` | 16 / 700 white | Set by the button themes. Kept at 16 on purpose: these are the conversion CTAs |
+| `nav` | 12 / 16 / 600 | Bottom navigation labels (set by the theme) |
 
-Use `AppText.x.copyWith(color: …)` to recolour. Don't build new `TextStyle`s from scratch, and don't override `fontSize`: pick the scale step instead (the only exceptions are long-form blog text and `PriceText(size:)`). Avoid stacking bold: one bold element per card is usually enough. Manrope's 700 reads lighter than most fonts, so don't bump weights to compensate.
+Use `AppText.x.copyWith(color: …)` to recolour. Don't build new `TextStyle`s from scratch, and don't override `fontSize`: pick the scale step instead (the only exceptions are long-form blog text and `PriceText(size:)`). Avoid stacking bold: one bold element per card is usually enough. Headings above card level are 800; card titles stay 700 so a list of cards doesn't shout.
 
 ```dart
 Text('Your car', style: AppText.h2),
