@@ -14,11 +14,9 @@ import '../../providers/app_providers.dart';
 import '../../widgets/customer_sheets.dart' show AddressForm;
 import '../../widgets/ui.dart';
 
-// ── Shared layout ─────────────────────────────────────────────────────────────
+// ── Shared layout (v3 design) ────────────────────────────────────────────────
 
-/// Dark brand header with the logo, then a white sheet holding the form and a
-/// sticky action button above the keyboard.
-/// Photo of the team at work with the brand and a one-line promise.
+/// Our team at work, the logo, and the promise in one line.
 class _HeroHeader extends StatelessWidget {
   final double top;
   const _HeroHeader({required this.top});
@@ -26,43 +24,60 @@ class _HeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: top + 230,
+      height: top + 300,
       width: double.infinity,
       child: Stack(fit: StackFit.expand, children: [
-        Image.asset('assets/images/wash_collage.jpg', fit: BoxFit.cover),
+        Image.asset('assets/images/hero_team_kit.jpg',
+            fit: BoxFit.cover,
+            alignment: const Alignment(-0.1, -0.5),
+            cacheWidth: 1000,
+            excludeFromSemantics: true),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0x99000000), Color(0xF20B0F10)],
+              stops: [0, 0.3, 0.75, 1],
+              colors: [
+                Color(0x8C0B0F10),
+                Color(0x000B0F10),
+                Color(0xCC0B0F10),
+                AppColors.ink
+              ],
             ),
           ),
         ),
         Padding(
           padding:
-              EdgeInsets.fromLTRB(AppSpace.page, top + 14, AppSpace.page, 26),
+              EdgeInsets.fromLTRB(AppSpace.page, top + 14, AppSpace.page, 40),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                    color: Colors.white, shape: BoxShape.circle),
-                child: ClipOval(
-                    child: Image.asset('assets/images/logo.png',
-                        width: 36, height: 36)),
-              ),
+              ClipOval(
+                  child: Image.asset('assets/images/logo.png',
+                      width: 40,
+                      height: 40,
+                      cacheWidth: 160,
+                      excludeFromSemantics: true)),
               const SizedBox(width: 10),
-              Text('CleanCruisers',
-                  style: AppText.h3.copyWith(color: Colors.white)),
+              Text.rich(
+                const TextSpan(children: [
+                  TextSpan(text: 'Clean'),
+                  TextSpan(
+                      text: 'Cruisers',
+                      style: TextStyle(color: AppColors.brand)),
+                ]),
+                style: AppText.h3.copyWith(color: Colors.white),
+              ),
             ]),
             const Spacer(),
             Text('Car wash at your\ndoorstep',
                 style: AppText.display.copyWith(color: Colors.white)),
             const SizedBox(height: 6),
-            Text('Trained experts · All of $kCityLabel · Pay after service',
-                style: AppText.small.copyWith(color: AppColors.brand)),
+            Text(
+                'Trained experts · All of $kCityLabel'
+                '${kPayAfterService ? ' · Pay after service' : ''}',
+                style: AppText.small.copyWith(color: const Color(0xFFD1D7DC))),
           ]),
         ),
       ]),
@@ -76,6 +91,9 @@ class _AuthScaffold extends StatelessWidget {
   final Widget action;
   final bool showBack;
   final bool hero;
+
+  /// Sign-up steps: "Step 1 of 2" and a progress bar.
+  final int? step, steps;
   const _AuthScaffold({
     required this.title,
     required this.subtitle,
@@ -83,85 +101,113 @@ class _AuthScaffold extends StatelessWidget {
     required this.action,
     this.showBack = false,
     this.hero = false,
+    this.step,
+    this.steps,
   });
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppTheme.overlayDark.copyWith(
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
-      ),
-      child: Scaffold(
-        backgroundColor: AppColors.ink,
-        body: Column(children: [
-          if (hero)
-            _HeroHeader(top: top)
-          else
-            Padding(
-              padding: EdgeInsets.fromLTRB(8, top + 4, 20, 22),
-              child: Row(children: [
-                if (showBack)
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back_rounded,
-                        color: Colors.white),
-                  )
-                else
-                  const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
-                  child: ClipOval(
-                      child: Image.asset('assets/images/logo.png',
-                          width: 40, height: 40)),
+    final head =
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (step != null && steps != null) ...[
+        Row(children: [
+          for (var i = 0; i < steps!; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color:
+                      i < step! ? AppColors.primary : const Color(0xFFDDE1E5),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('CleanCruisers',
-                            style: AppText.h3.copyWith(color: Colors.white)),
-                        Text('Doorstep car care · $kCityLabel',
-                            style: AppText.caption
-                                .copyWith(color: Colors.white70)),
-                      ]),
-                ),
-              ]),
+              ),
             ),
-          Expanded(
-            child: Container(
-              width: double.infinity,
+          ],
+        ]),
+        const SizedBox(height: AppSpace.md),
+        Text('Step $step of $steps', style: AppText.caption),
+        const SizedBox(height: 2),
+      ],
+      Semantics(header: true, child: Text(title, style: AppText.h1)),
+      const SizedBox(height: 6),
+      Text(subtitle, style: AppText.body),
+      const SizedBox(height: AppSpace.xxl),
+    ]);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: hero
+          ? AppTheme.overlayDark.copyWith(
+              statusBarIconBrightness: Brightness.light,
+              statusBarBrightness: Brightness.dark,
+            )
+          : SystemUiOverlayStyle.dark
+              .copyWith(statusBarColor: Colors.transparent),
+      child: Scaffold(
+        backgroundColor: hero ? AppColors.ink : AppColors.bg,
+        body: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.15,
+          child: Column(children: [
+            if (hero) _HeroHeader(top: top),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  borderRadius: hero
+                      ? const BorderRadius.vertical(
+                          top: Radius.circular(AppRadius.lg))
+                      : null,
+                ),
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(AppSpace.page,
+                      hero ? 26 : top + AppSpace.md, AppSpace.page, 24),
+                  children: [
+                    if (showBack) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Semantics(
+                          button: true,
+                          label: 'Back',
+                          child: ExcludeSemantics(
+                            child: Material(
+                              color: AppColors.surface,
+                              shape: const CircleBorder(
+                                  side: BorderSide(color: AppColors.border)),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => context.pop(),
+                                child: const SizedBox(
+                                  width: 44,
+                                  height: 44,
+                                  child: Icon(Icons.arrow_back_rounded,
+                                      size: 20, color: AppColors.text),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.xl),
+                    ],
+                    head,
+                    ...children,
+                  ],
+                ),
+              ),
+            ),
+            Container(
               decoration: const BoxDecoration(
                 color: AppColors.surface,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+                border: Border(top: BorderSide(color: AppColors.border)),
               ),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpace.page, 28, AppSpace.page, 24),
-                children: [
-                  Semantics(
-                      header: true, child: Text(title, style: AppText.h1)),
-                  const SizedBox(height: 6),
-                  Text(subtitle, style: AppText.body),
-                  const SizedBox(height: 24),
-                  ...children,
-                ],
-              ),
+              padding: EdgeInsets.fromLTRB(AppSpace.page, 12, AppSpace.page,
+                  12 + MediaQuery.paddingOf(context).bottom),
+              child: action,
             ),
-          ),
-          Container(
-            color: AppColors.surface,
-            padding: EdgeInsets.fromLTRB(AppSpace.page, 8, AppSpace.page,
-                12 + MediaQuery.paddingOf(context).bottom),
-            child: action,
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
@@ -215,8 +261,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return _AuthScaffold(
       hero: true,
       title: 'Log in with your mobile',
-      subtitle:
-          'We\'ll send a 6-digit OTP to verify your number. It\'s how our team reaches you about your bookings.',
+      subtitle: 'We\'ll send a 6-digit code by SMS.',
       action: PrimaryButton(
         label: 'Get OTP',
         loading: _sending,
@@ -239,6 +284,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
             style: AppText.h2.copyWith(letterSpacing: 1.5),
             decoration: InputDecoration(
+              labelText: 'Mobile number',
+              floatingLabelBehavior: FloatingLabelBehavior.always,
               hintText: '98765 43210',
               hintStyle: AppText.h2
                   .copyWith(color: AppColors.border, letterSpacing: 1.5),
@@ -255,25 +302,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 18),
-        for (final (icon, text) in const [
-          (Icons.event_available_outlined, 'Book a wash in under a minute'),
-          (
-            Icons.track_changes_rounded,
-            'Track your booking live, on any phone'
-          ),
-          (Icons.payments_outlined, 'Pay after the service, by cash or UPI'),
-        ])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(children: [
-              IconBadge(icon, size: 34),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Text(text,
-                      style: AppText.small.copyWith(color: AppColors.text))),
-            ]),
-          ),
+        const SizedBox(height: AppSpace.md),
+        Text(
+            'Our team uses this number only to reach you about your '
+            'bookings.',
+            style: AppText.caption),
         if (!configured) ...[
           const SizedBox(height: 8),
           const NoticeBox(
@@ -378,7 +411,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       title: 'Enter the OTP',
       subtitle: 'Sent by SMS to $shown',
       action: PrimaryButton(
-        label: 'Verify & continue',
+        label: 'Verify and continue',
         loading: _verifying,
         onPressed: _code.text.length == _length ? _verify : null,
       ),
@@ -431,7 +464,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               onPressed: _resend,
               style: TextButton.styleFrom(
                   padding: EdgeInsets.zero, minimumSize: const Size(0, 36)),
-              child: const Text('Resend OTP'),
+              child: const Text('Resend code'),
             ),
           const Spacer(),
           TextButton(
@@ -449,18 +482,18 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final active = i == text.length && _focus.hasFocus;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 120),
-      height: 56,
+      height: 58,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: filled ? AppColors.primarySoft : AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: _error != null
               ? AppColors.error
               : active
                   ? AppColors.primary
                   : filled
-                      ? AppColors.primary.withValues(alpha: 0.4)
+                      ? const Color(0xFFB9C2BC)
                       : AppColors.border,
           width: active ? 2 : 1.2,
         ),
@@ -482,6 +515,8 @@ class NameScreen extends ConsumerStatefulWidget {
 class _NameScreenState extends ConsumerState<NameScreen> {
   late final _name =
       TextEditingController(text: ref.read(profileProvider).name);
+  late final _model =
+      TextEditingController(text: ref.read(profileProvider).carModel);
   late CarType? _car = ref.read(profileProvider).car;
   bool _saving = false;
 
@@ -490,6 +525,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _model.dispose();
     super.dispose();
   }
 
@@ -505,7 +541,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
             address: profile.address,
             pin: profile.pin,
             car: _car,
-            carModel: profile.carModel,
+            carModel: _model.text.trim(),
           ));
       await cloud.saveCustomerName(_name.text);
       // The router moves on once the name is saved.
@@ -521,6 +557,8 @@ class _NameScreenState extends ConsumerState<NameScreen> {
   @override
   Widget build(BuildContext context) {
     return _AuthScaffold(
+      step: 1,
+      steps: 2,
       title: 'Welcome!',
       subtitle: 'Tell us about you and your car. Just once.',
       action: PrimaryButton(
@@ -538,16 +576,35 @@ class _NameScreenState extends ConsumerState<NameScreen> {
             textCapitalization: TextCapitalization.words,
             autofillHints: const [AutofillHints.name],
             decoration: const InputDecoration(
+              labelText: 'Your name',
               hintText: 'Full name',
               prefixIcon: Icon(Icons.person_outline_rounded),
             ),
           ),
         ),
-        const SizedBox(height: 26),
-        Text('Your car', style: AppText.h3),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.xxl),
+        Text('Your car\'s size', style: AppText.h3),
+        const SizedBox(height: 2),
+        Text('Prices depend on it. You can change it any time.',
+            style: AppText.small),
+        const SizedBox(height: AppSpace.md),
         CarTypePicker(
             selected: _car, onChanged: (c) => setState(() => _car = c)),
+        const SizedBox(height: AppSpace.xl),
+        Semantics(
+          label: 'Model and colour, optional',
+          textField: true,
+          child: TextField(
+            controller: _model,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Model and colour (optional)',
+              hintText: 'e.g. White Swift',
+              helperText: 'Helps the expert find your car',
+              prefixIcon: Icon(Icons.directions_car_outlined),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -603,6 +660,8 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
   @override
   Widget build(BuildContext context) {
     return _AuthScaffold(
+      step: 2,
+      steps: 2,
       title: 'Where do you park?',
       subtitle: 'Our expert comes here for every wash.',
       action: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -620,11 +679,11 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
       children: [
         // Customers from before onboarding asked for the car may not have one.
         if (_profile.car == null) ...[
-          Text('Your car', style: AppText.h3),
-          const SizedBox(height: 12),
+          Text('Your car\'s size', style: AppText.h3),
+          const SizedBox(height: AppSpace.md),
           CarTypePicker(
               selected: _car, onChanged: (c) => setState(() => _car = c)),
-          const SizedBox(height: 26),
+          const SizedBox(height: AppSpace.xxl),
         ],
         AddressForm(
           initialAddress: _profile.address,
@@ -639,7 +698,8 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
   }
 }
 
-/// Four car categories as large tappable tiles.
+/// The four car sizes as a list: name, example models (which size am I?),
+/// an optional price, and a radio.
 class CarTypePicker extends StatelessWidget {
   final CarType? selected;
   final ValueChanged<CarType> onChanged;
@@ -666,77 +726,69 @@ class CarTypePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Two per row; each tile is as tall as its text, so the model examples
-    // are never cut off, even with large system text.
-    return LayoutBuilder(
-      builder: (context, box) => Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: [
-          for (final c in CarType.values)
-            SizedBox(
-              width: (box.maxWidth - 10) / 2,
-              child: Semantics(
-                button: true,
-                selected: selected == c,
-                label: '${carTypeNames[c]}, like ${modelExamples[c]}',
-                child: AppCard(
-                  selected: selected == c,
-                  padding: const EdgeInsets.all(12),
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onChanged(c);
-                  },
-                  child: ExcludeSemantics(
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: selected == c
-                                  ? AppColors.primary
-                                  : AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                            ),
-                            child: Icon(icons[c],
-                                color: selected == c
-                                    ? Colors.white
-                                    : AppColors.primary,
-                                size: 22),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(carTypeNames[c]!,
-                                      style: AppText.bodyStrong,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 2),
-                                  // Which size am I? Examples settle it.
-                                  Text(modelExamples[c]!,
-                                      style: AppText.caption,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis),
-                                  if (priceFor?.call(c) case final p?) ...[
-                                    const SizedBox(height: 2),
-                                    Text(rupees(p),
-                                        style: AppText.bodyStrong.copyWith(
-                                            fontWeight: FontWeight.w800)),
-                                  ],
-                                ]),
-                          ),
-                        ]),
-                  ),
+    return Column(children: [
+      for (final c in CarType.values) ...[
+        if (c != CarType.values.first) const SizedBox(height: AppSpace.sm),
+        Semantics(
+          button: true,
+          selected: selected == c,
+          label: '${carTypeNames[c]}, like ${modelExamples[c]}'
+              '${priceFor?.call(c) == null ? '' : ', ${rupees(priceFor!(c)!)}'}',
+          child: ExcludeSemantics(
+            child: AppCard(
+              selected: selected == c,
+              radius: AppRadius.md,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.lg, vertical: AppSpace.md),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onChanged(c);
+              },
+              child: Row(children: [
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(carTypeNames[c]!, style: AppText.title),
+                        Text('Like ${modelExamples[c]}', style: AppText.small),
+                      ]),
                 ),
-              ),
+                if (priceFor?.call(c) case final p?) ...[
+                  const SizedBox(width: AppSpace.sm),
+                  Text(rupees(p),
+                      style: AppText.bodyStrong.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800)),
+                ],
+                const SizedBox(width: AppSpace.md),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected == c ? AppColors.primary : null,
+                    border: Border.all(
+                        color: selected == c
+                            ? AppColors.primary
+                            : const Color(0xFFB9C2BC),
+                        width: 2),
+                  ),
+                  child: selected == c
+                      ? Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                              color: Colors.white, shape: BoxShape.circle),
+                        )
+                      : null,
+                ),
+              ]),
             ),
-        ],
-      ),
-    );
+          ),
+        ),
+      ],
+    ]);
   }
 }
