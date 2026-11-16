@@ -1,23 +1,31 @@
 import 'package:cleancruisers_app/core/theme.dart';
+import 'package:cleancruisers_app/data/booking_cloud.dart' show OtpSession;
+import 'package:cleancruisers_app/models/service.dart';
 import 'package:cleancruisers_app/providers/app_providers.dart';
+import 'package:cleancruisers_app/screens/addresses_screen.dart';
+import 'package:cleancruisers_app/screens/auth/login_screen.dart';
 import 'package:cleancruisers_app/screens/booking/booking_flow_screen.dart';
+import 'package:cleancruisers_app/screens/booking_detail_screen.dart';
+import 'package:cleancruisers_app/screens/booking_sent_screen.dart';
 import 'package:cleancruisers_app/screens/bookings_screen.dart';
 import 'package:cleancruisers_app/screens/home_screen.dart';
 import 'package:cleancruisers_app/screens/profile_screen.dart';
 import 'package:cleancruisers_app/screens/service_detail_screen.dart';
 import 'package:cleancruisers_app/screens/services_screen.dart';
 import 'package:cleancruisers_app/screens/splash_screen.dart';
+import 'package:cleancruisers_app/screens/wallet_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'fixtures.dart';
 
 /// Renders a screen at phone size and fails on any RenderFlex overflow.
 Future<void> pumpAt(WidgetTester tester, Widget screen,
-    {required double textScale}) async {
-  SharedPreferences.setMockInitialValues({});
+    {required double textScale, Map<String, Object> saved = const {}}) async {
+  SharedPreferences.setMockInitialValues(saved);
   final prefs = await SharedPreferences.getInstance();
   tester.view.physicalSize =
       const Size(360, 3000); // small phone, tall to lay out everything
@@ -42,23 +50,59 @@ Future<void> pumpAt(WidgetTester tester, Widget screen,
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
-  final screens = <String, Widget>{
-    'Home': const HomeScreen(),
-    'Services': const ServicesScreen(),
+  const ref = 'CC-7K4Q2X9M';
+  // name -> (screen, saved data it starts with)
+  final screens = <String, (Widget, Map<String, Object>)>{
+    'Home': (const HomeScreen(), const {}),
+    'Home (booked)': (const HomeScreen(), bookingPrefs()),
+    'Home (book again)': (const HomeScreen(), repeatPrefs()),
+    'Services': (const ServicesScreen(), const {}),
+    'Services (detailing)': (
+      const ServicesScreen(initialCategory: ServiceCategory.detailing),
+      profile
+    ),
     'Service detail (monthly)':
-        const ServiceDetailScreen(serviceId: 'monthly-3'),
+        (const ServiceDetailScreen(serviceId: 'monthly-3'), const {}),
     'Service detail (full detailing)':
-        const ServiceDetailScreen(serviceId: 'full-package'),
-    'Booking flow': const BookingFlowScreen(serviceId: 'monthly-3'),
-    'Bookings (empty)': const BookingsScreen(),
-    'Profile': const ProfileScreen(),
+        (const ServiceDetailScreen(serviceId: 'full-package'), const {}),
+    'Booking flow': (const BookingFlowScreen(serviceId: 'monthly-3'), const {}),
+    'Booking flow (extras)':
+        (const BookingFlowScreen(serviceId: 'wash-full'), profile),
+    'Booking sent': (
+      const BookingSentScreen(bookingRef: ref),
+      bookingPrefs(confirmed: false)
+    ),
+    'Bookings (empty)': (const BookingsScreen(), const {}),
+    'Bookings (upcoming)': (const BookingsScreen(), bookingPrefs()),
+    'Booking detail (waiting)': (
+      const BookingDetailScreen(bookingRef: ref),
+      bookingPrefs(confirmed: false)
+    ),
+    'Booking detail (confirmed)':
+        (const BookingDetailScreen(bookingRef: ref), bookingPrefs()),
+    'Booking detail (new time offered)':
+        (const BookingDetailScreen(bookingRef: ref), holdPrefs()),
+    'Booking detail (done)':
+        (const BookingDetailScreen(bookingRef: ref), repeatPrefs()),
+    'Profile': (const ProfileScreen(), profile),
+    'Offers': (const WalletScreen(), profile),
+    'My addresses': (const AddressesScreen(), bookingPrefs()),
+    'My addresses (empty)': (const AddressesScreen(), const {}),
+    'Login': (const LoginScreen(), const {}),
+    'OTP': (
+      const OtpScreen(session: OtpSession(phone: '9876543210')),
+      const {}
+    ),
+    'Sign up: name and car': (const NameScreen(), const {}),
+    'Sign up: address': (const AddressScreen(), const {}),
   };
 
   for (final scale in [1.0, 1.3]) {
     for (final e in screens.entries) {
       testWidgets('${e.key} has no overflow at text scale $scale',
           (tester) async {
-        await pumpAt(tester, e.value, textScale: scale);
+        final (screen, prefs) = e.value;
+        await pumpAt(tester, screen, textScale: scale, saved: prefs);
         expect(tester.takeException(), isNull);
       });
     }

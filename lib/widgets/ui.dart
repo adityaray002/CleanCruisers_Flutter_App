@@ -258,15 +258,22 @@ class Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: 5)
-        ],
-        Text(label,
-            style: AppText.caption
-                .copyWith(color: fg, fontWeight: FontWeight.w700)),
-      ]),
+      // One Text.rich (icon inline) so a long label wraps instead of
+      // overflowing when the pill is narrower than its text.
+      child: Text.rich(
+        TextSpan(children: [
+          if (icon != null)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: Icon(icon, size: 14, color: fg),
+              ),
+            ),
+          TextSpan(text: label),
+        ]),
+        style: AppText.caption.copyWith(color: fg, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }

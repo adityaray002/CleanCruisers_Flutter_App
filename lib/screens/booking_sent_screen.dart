@@ -185,9 +185,14 @@ class _StatusCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Pill(confirmed ? 'Confirmed' : 'Waiting for confirmation',
-              tone: confirmed ? PillTone.brand : PillTone.warning),
-          const Spacer(),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Pill(confirmed ? 'Confirmed' : 'Waiting for confirmation',
+                  tone: confirmed ? PillTone.brand : PillTone.warning),
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
           Semantics(
             button: true,
             label: 'Booking ${b.ref}. Copy',

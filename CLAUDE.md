@@ -95,7 +95,7 @@ Shared widgets live in `lib/widgets/`. Screen-private widgets are `_Private` cla
 | `SecondaryButton` | `(label:, onPressed:, icon?, expand, dense)` | Outlined button |
 | `AppCard` | `(child:, padding=16, onTap?, selected, color?, radius=md)` | Any white card; `selected` = green border + tint |
 | `SectionHeader` | `(title, subtitle?, actionLabel?, onAction?)` | Section title + "See all" |
-| `Pill` | `(label, icon?, tone: PillTone.neutral/brand/solid/dark/warning)` | Tag / badge / status chip. The only pill shape: `solid` (filled green) for highlights, `neutral` for facts |
+| `Pill` | `(label, icon?, tone: PillTone.neutral/brand/solid/dark/warning)` | Tag / badge / status chip. The only pill shape: `solid` (filled green) for highlights, `neutral` for facts. Long labels wrap; in a `Row`, wrap it in `Expanded`/`Flexible` |
 | `CheckItem` | `(text, included=true)` | ✓ / ✕ list row |
 | `InfoRow` | `(icon:, label:, value:, trailing?, onTap?)` | Icon + label + value list row |
 | `IconBadge` | `(icon, size=40, dark=false)` | Icon in a tinted rounded square |
@@ -114,12 +114,14 @@ Shared widgets live in `lib/widgets/`. Screen-private widgets are `_Private` cla
 | `lib/widgets/how_it_works.dart` | `HowItWorksSteps` |
 | `lib/widgets/motion.dart` | `Reveal` (fade/slide in on scroll), `KenBurns` (slow photo zoom), `PressScale` (tap shrink), `ConfettiBurst` |
 | `lib/widgets/contact_actions.dart` | `openWhatsApp()` (general support only, never booking data), `openLink()`. No phone-call buttons anywhere in the app |
-| `lib/widgets/customer_sheets.dart` | `AddressForm`, `showAddressSheet()` (saved-address picker, Zomato style), `showAddressForm()`, `showCarSheet()`, `addressCoverage()`, `CoverageChip` |
+| `lib/widgets/customer_sheets.dart` | `AddressForm`, `showAddressSheet()` ("Where's your car?": current location, saved addresses as radio cards, blocks not-covered ones, links to `/addresses`), `showAddressForm(existing?)`, `showCarSheet()`, `addressCoverage()`, `CoverageChip` |
 | `lib/widgets/offer_card.dart` | `OfferCard` (coupon ticket). Offers themselves live in `lib/data/offers.dart` |
 | `lib/widgets/book_button.dart` | `BookButton(service, primary)` ("Book now"; filled when `primary`, otherwise outlined) |
-| `lib/widgets/brand_header.dart` | `BrandTitle` (logo + wordmark), `LocationChip` (address picker pill), `RoundSurface` (bordered pill/circle for header controls) |
+| `lib/widgets/brand_header.dart` | `BrandWithAddress` (logo + wordmark + where the car is), `ParkedAtLine(withOverline)` ("Home · address ⌄", opens the address sheet), `CarPill` (car size, opens the car sheet), `RoundSurface` (bordered pill/circle for header controls) |
 | `lib/widgets/trust_widgets.dart` | `WhyUsStrip(tinted)` (facts from `business_info.dart` only; `tinted` = mint background), `HelpCard(title, line, message)` (WhatsApp support) |
-| `lib/screens/auth/login_screen.dart` | `CarTypePicker` (2×2 car-type tiles, optional prices), reused by booking flow and home |
+| `lib/screens/auth/login_screen.dart` | `CarTypePicker` (radio list: size, example models, optional price), reused by sign-up and the car sheet |
+| `lib/screens/bookings_screen.dart` | `statusChip(BookingRecord)` → `(label, PillTone)`, the one place booking status words come from |
+| `lib/screens/addresses_screen.dart` | `AddressesScreen` (`/addresses`); `AddressesScreen.bookingUsing()` blocks deleting an address an upcoming booking uses |
 
 ### Patterns to follow
 
@@ -148,8 +150,15 @@ Scaffold(
 ```
 
 - Every tappable custom widget gets `Semantics(button: true, label: …)`; text fields use the `_labelled()` helper pattern in `booking_steps.dart`.
-- Selected state = `AppColors.primary` border/fill + `primarySoft` tint (see `CarTypePicker`, `_SlotChip`, `_ForWhom`).
+- Selected state = `AppColors.primary` border/fill + `primarySoft` tint (see `CarTypePicker`, `_SlotChip`). Chips that pick one of a few (day, address label, need) are dark (`ink`) when selected.
 - Light haptics on selection: `HapticFeedback.selectionClick()`.
+
+### Business truths the screens must keep
+
+- Payment is after the service (cash/UPI). Bills say "To pay after the service".
+- A slot is a **request**; the team confirms it, "usually within 1–2 hours" (`kConfirmUsually` in `business_info.dart`). Cancel and change time are requests too (`requestCustomerChange`), never instant.
+- When a slot is taken while sending, `BookingCloudException.slotTaken` is true and the flow shows other open windows.
+- No ratings, reviews or expert names until they are real data (`kRatingValue` is null; bookings store only `workerId`).
 
 ---
 
@@ -212,11 +221,12 @@ lib/
   widgets/                  ← shared components (section 3)
   screens/
     auth/                   login, OTP, name
-    booking/                4-step booking flow (booking_flow_screen + booking_steps)
+    booking/                3-step booking flow: Extras (skipped when none) → Pick a time → Review (booking_flow_screen + booking_steps)
     ops/                    staff booking desk (board, queue, roster, capacity)
-    home, services, service_detail, bookings, booking_detail, booking_sent, profile, blog, splash
+    home, services, service_detail, bookings, booking_detail, booking_sent, profile, wallet (Offers), addresses, blog, splash
 test/
-  *_test.dart               unit + layout tests (run with `flutter test`)
+  *_test.dart               unit, behaviour and layout tests (run with `flutter test`)
+  fixtures.dart             shared customer/booking data for tests and screenshots
   screenshots/              visual review tool (not part of the normal test run)
 docs/                       setup and business docs
 ```

@@ -556,7 +556,9 @@ class _PickBar extends StatelessWidget {
     return BottomActionBar(
       child: Row(children: [
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 150),
+          // Narrow enough that "Pick a time" never truncates on a
+          // small phone with large text.
+          constraints: const BoxConstraints(maxWidth: 120),
           child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,

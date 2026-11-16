@@ -203,9 +203,12 @@ class _UpcomingCard extends StatelessWidget {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Flexible(child: Pill(chip, tone: tone)),
+              Expanded(
+                child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Pill(chip, tone: tone)),
+              ),
               const SizedBox(width: AppSpace.sm),
-              const Spacer(),
               Text(friendlyDate(b.date), style: AppText.caption),
             ]),
             const SizedBox(height: AppSpace.sm),

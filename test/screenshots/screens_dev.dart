@@ -2,11 +2,7 @@
 // Run: flutter test test/screenshots/screens_dev.dart [--dart-define=ONLY=a,b]
 // Each screen is saved twice: "<name>_fold" at phone height (what is visible
 // without scrolling) and "<name>_full" at full length.
-import 'dart:convert';
-import 'package:cleancruisers_app/core/format.dart';
-import 'package:cleancruisers_app/core/pricing.dart';
 import 'package:cleancruisers_app/data/booking_cloud.dart';
-import 'package:cleancruisers_app/models/booking.dart';
 import 'package:cleancruisers_app/models/service.dart';
 import 'package:cleancruisers_app/screens/addresses_screen.dart';
 import 'package:cleancruisers_app/screens/auth/login_screen.dart';
@@ -21,73 +17,8 @@ import 'package:cleancruisers_app/screens/services_screen.dart';
 import 'package:cleancruisers_app/screens/wallet_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../fixtures.dart';
 import 'shots.dart';
-
-const profile = {
-  'profile_v1':
-      '{"name":"Rahul Sharma","phone":"9876543210","address":"B-12, Pocket 3, Janakpuri, near metro","car":"hatchback","carModel":"White Swift"}'
-};
-
-final _booking = {
-  ...BookingRecord.fromDraft(BookingDraft(
-    service: serviceById('wash-full')!,
-    bookingRef: 'CC-7K4Q2X9M',
-    car: CarType.hatchback,
-    carModel: 'White Swift',
-    extras: const {'seat': 2},
-    date: addDays(DateTime.now(), 1),
-    slotId: '0930',
-    name: 'Rahul Sharma',
-    phone: '9876543210',
-    address: 'B-12, Pocket 3, Janakpuri, near metro',
-  )).toJson(),
-};
-
-Map<String, Object> bookingPrefs({bool confirmed = true}) => {
-      ...profile,
-      'bookings_v1': jsonEncode([
-        {
-          ..._booking,
-          if (confirmed) ...{
-            'status': 'confirmed',
-            'workerId': 'w1',
-            'plannedArrivalMinute': 595,
-            'history': [
-              ...(_booking['history'] as List),
-              StatusEvent(BookingStatus.confirmed, DateTime.now(),
-                      'Expert booked. Arriving around 9:55 AM.')
-                  .toJson(),
-            ],
-          },
-        }
-      ]),
-    };
-
-/// A returning customer with one finished wash and nothing in progress
-/// (Home shows "Book again").
-Map<String, Object> repeatPrefs() => {
-      ...profile,
-      'bookings_v1': jsonEncode([
-        {
-          ..._booking,
-          'date': addDays(DateTime.now(), -11).toIso8601String(),
-          'status': 'completed',
-        }
-      ]),
-    };
-
-/// Rain hold: the team offers another slot and leaves a note.
-Map<String, Object> holdPrefs() => {
-      ...profile,
-      'bookings_v1': jsonEncode([
-        {
-          ..._booking,
-          'status': 'rescheduleNeeded',
-          'offeredDate': addDays(DateTime.now(), 2).toIso8601String(),
-          'offeredSlotId': '0930',
-        }
-      ]),
-    };
 
 /// Saved car + address: the flow opens on the time step. Pick a slot.
 Future<void> toSlot(WidgetTester t) async {

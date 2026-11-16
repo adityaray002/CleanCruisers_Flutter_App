@@ -454,24 +454,32 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
           Text(_error!, style: AppText.small.copyWith(color: AppColors.error)),
         ],
         const SizedBox(height: 18),
-        Row(children: [
-          Text('Didn\'t get it? ', style: AppText.small),
-          if (_secondsLeft > 0)
-            Text('Resend in 0:${_secondsLeft.toString().padLeft(2, '0')}',
-                style: AppText.smallStrong)
-          else
+        // Wraps to two lines on small phones with large text.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('Didn\'t get it? ', style: AppText.small),
+              if (_secondsLeft > 0)
+                Text('Resend in 0:${_secondsLeft.toString().padLeft(2, '0')}',
+                    style: AppText.smallStrong)
+              else
+                TextButton(
+                  onPressed: _resend,
+                  style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 44)),
+                  child: const Text('Resend code'),
+                ),
+            ]),
             TextButton(
-              onPressed: _resend,
-              style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero, minimumSize: const Size(0, 36)),
-              child: const Text('Resend code'),
+              onPressed: () => context.pop(),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              child: const Text('Change number'),
             ),
-          const Spacer(),
-          TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('Change number'),
-          ),
-        ]),
+          ],
+        ),
       ],
     );
   }

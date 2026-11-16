@@ -587,21 +587,26 @@ class _DarkProgress extends StatelessWidget {
           Row(children: [
             for (var i = 0; i < 5; i++)
               Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: i == 0
-                      ? Alignment.centerLeft
-                      : i == 4
-                          ? Alignment.centerRight
-                          : Alignment.center,
-                  child: Text(_labels[i],
-                      style: AppText.caption.copyWith(
-                          color: i == current
-                              ? Colors.white
-                              : const Color(0xFF8A949B),
-                          fontWeight: i == current
-                              ? FontWeight.w800
-                              : FontWeight.w600)),
+                // Gap between labels so they never run together when
+                // they shrink on narrow phones.
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: i == 0
+                        ? Alignment.centerLeft
+                        : i == 4
+                            ? Alignment.centerRight
+                            : Alignment.center,
+                    child: Text(_labels[i],
+                        style: AppText.caption.copyWith(
+                            color: i == current
+                                ? Colors.white
+                                : const Color(0xFF8A949B),
+                            fontWeight: i == current
+                                ? FontWeight.w800
+                                : FontWeight.w600)),
+                  ),
                 ),
               ),
           ]),
