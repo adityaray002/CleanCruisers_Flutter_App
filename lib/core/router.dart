@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../data/booking_cloud.dart';
 import '../models/service.dart';
 import '../providers/app_providers.dart';
+import '../screens/addresses_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/blog_detail_screen.dart';
 import '../screens/blog_list_screen.dart';
@@ -164,6 +165,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, s) =>
             BookingDetailScreen(bookingRef: s.pathParameters['ref']!),
       ),
+      GoRoute(path: '/addresses', builder: (_, __) => const AddressesScreen()),
       GoRoute(path: '/blog', builder: (_, __) => const BlogListScreen()),
       GoRoute(
         path: '/blog/:id',

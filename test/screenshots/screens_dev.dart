@@ -8,6 +8,7 @@ import 'package:cleancruisers_app/core/pricing.dart';
 import 'package:cleancruisers_app/data/booking_cloud.dart';
 import 'package:cleancruisers_app/models/booking.dart';
 import 'package:cleancruisers_app/models/service.dart';
+import 'package:cleancruisers_app/screens/addresses_screen.dart';
 import 'package:cleancruisers_app/screens/auth/login_screen.dart';
 import 'package:cleancruisers_app/screens/booking/booking_flow_screen.dart';
 import 'package:cleancruisers_app/screens/booking_detail_screen.dart';
@@ -173,5 +174,11 @@ void main() {
       'detail_hold', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
       prefs: holdPrefs());
   both('profile', const ProfileScreen(), 2000, prefs: profile);
+  both('addresses', const AddressesScreen(), 1000, prefs: bookingPrefs());
+  both('address_sheet', const HomeScreen(), 800, prefs: profile,
+      interact: (t) async {
+    await t.tap(find.text('Car parked at'));
+    await t.pumpAndSettle();
+  });
   both('wallet', const WalletScreen(), 1400, prefs: profile);
 }

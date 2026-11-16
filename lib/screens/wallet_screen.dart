@@ -23,152 +23,134 @@ class WalletScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(title: const Text('CleanCredit')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpace.page, AppSpace.sm, AppSpace.page, AppSpace.page * 2),
-        children: [
-          // ── Balance ──
-          Container(
-            padding: const EdgeInsets.all(AppSpace.xl),
-            decoration: BoxDecoration(
-              color: AppColors.ink,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-            ),
-            child: Row(children: [
-              Expanded(
+      body: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.15,
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.section),
+            children: [
+              Semantics(header: true, child: Text('Offers', style: AppText.h1)),
+              const SizedBox(height: AppSpace.lg),
+              // ── CleanCredit ──
+              Container(
+                padding: const EdgeInsets.all(AppSpace.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.ink,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('YOUR CREDIT',
-                          style: AppText.overline
-                              .copyWith(color: AppColors.brand)),
+                      Row(children: [
+                        Expanded(
+                          child: Text('YOUR CLEANCREDIT',
+                              style: AppText.overline
+                                  .copyWith(color: AppColors.brand)),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.brand,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text('Never expires',
+                              style: AppText.caption
+                                  .copyWith(color: AppColors.ink)),
+                        ),
+                      ]),
                       const SizedBox(height: 4),
                       Text(rupees(wallet.balance),
                           style: AppText.display.copyWith(color: Colors.white)),
+                      const SizedBox(height: AppSpace.md),
+                      const Row(children: [
+                        Expanded(
+                          child: _CreditFact('Given by our team',
+                              'When something goes wrong with a visit'),
+                        ),
+                        SizedBox(width: AppSpace.sm),
+                        Expanded(
+                          child: _CreditFact('Used automatically',
+                              'Taken off your next booking'),
+                        ),
+                      ]),
                     ]),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text('Never Expires',
-                    style: AppText.caption.copyWith(
-                        color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          ),
 
-          // ── Offers ──
-          if (kOffers.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.xxl),
-            Semantics(
-                header: true, child: Text('Offers for you', style: AppText.h2)),
-            const SizedBox(height: AppSpace.md),
-            for (final o in kOffers) ...[
-              OfferCard(
-                offer: o,
-                // Bill size isn't known yet; car and first booking are.
-                blockedReason:
-                    o.whyNot(total: 1 << 30, car: car, firstBooking: first),
-                applied: picked == o.code,
-                actionLabel: picked == o.code ? 'Saved' : 'Use',
-                onAction: () async {
-                  await ref.read(pickedOfferProvider.notifier).pick(o.code);
-                  if (context.mounted) {
-                    showMessage(context,
-                        '${o.code} saved. It\'s applied when you book.');
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-            ],
-          ],
-
-          // ── How credit works ──
-          const SizedBox(height: AppSpace.lg),
-          const AppCard(
-            child: Column(children: [
-              _BenefitRow(
-                icon: Icons.support_agent_rounded,
-                title: 'Given by our team',
-                description: 'When something goes wrong with a visit.',
-              ),
-              Divider(height: 20),
-              _BenefitRow(
-                icon: Icons.bolt_rounded,
-                title: 'Used automatically',
-                description: 'Taken off your next booking.',
-              ),
-            ]),
-          ),
-
-          // ── History ──
-          if (wallet.transactions.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.xxl),
-            Text('History', style: AppText.h3),
-            const SizedBox(height: AppSpace.md),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (int i = 0; i < wallet.transactions.length; i++) ...[
-                    _TransactionTile(wallet.transactions[i]),
-                    if (i < wallet.transactions.length - 1)
-                      const Divider(height: 1, indent: 60),
-                  ],
+              // ── Offers ──
+              if (kOffers.isNotEmpty) ...[
+                const SizedBox(height: AppSpace.xxl),
+                Semantics(
+                    header: true,
+                    child: Text('Offers for you', style: AppText.h2)),
+                const SizedBox(height: AppSpace.md),
+                for (final o in kOffers) ...[
+                  OfferCard(
+                    offer: o,
+                    // Bill size isn't known yet; car and first booking are.
+                    blockedReason:
+                        o.whyNot(total: 1 << 30, car: car, firstBooking: first),
+                    applied: picked == o.code,
+                    actionLabel: picked == o.code ? 'Saved' : 'Use',
+                    onAction: () async {
+                      await ref.read(pickedOfferProvider.notifier).pick(o.code);
+                      if (context.mounted) {
+                        showMessage(context,
+                            '${o.code} saved. It\'s applied when you book.');
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
                 ],
-              ),
-            ),
-          ],
-        ],
+              ],
+
+              // ── History ──
+              if (wallet.transactions.isNotEmpty) ...[
+                const SizedBox(height: AppSpace.xxl),
+                Text('Credit history', style: AppText.h3),
+                const SizedBox(height: AppSpace.md),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < wallet.transactions.length; i++) ...[
+                        _TransactionTile(wallet.transactions[i]),
+                        if (i < wallet.transactions.length - 1)
+                          const Divider(height: 1, indent: 60),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _BenefitRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _BenefitRow({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
+class _CreditFact extends StatelessWidget {
+  final String title, line;
+  const _CreditFact(this.title, this.line);
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, color: AppColors.primary, size: 22),
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141B1D),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: const Color(0xFF2A3336)),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppText.bodyStrong),
-              const SizedBox(height: 2),
-              Text(
-                description,
-                style: AppText.small.copyWith(
-                  color: AppColors.textMuted,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: AppText.smallStrong.copyWith(color: Colors.white)),
+          const SizedBox(height: 2),
+          Text(line,
+              style: AppText.caption.copyWith(color: const Color(0xFFB8C0C7))),
+        ]),
+      );
 }
 
 class _TransactionTile extends StatelessWidget {

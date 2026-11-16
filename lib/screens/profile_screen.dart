@@ -7,146 +7,170 @@ import '../core/format.dart';
 import '../core/pricing.dart';
 import '../core/theme.dart';
 import '../data/business_info.dart';
+import '../models/address.dart';
 import '../models/booking.dart';
 import '../providers/app_providers.dart';
 import '../widgets/contact_actions.dart';
 import '../widgets/customer_sheets.dart';
 import '../widgets/ui.dart';
 
+/// Profile (v3 design): who you are, your car, addresses, bookings and
+/// CleanCredit; help; about; log out (with a confirm) and team sign in.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = ref.watch(profileProvider);
+    final upcoming = ref
+        .watch(myBookingsProvider)
+        .where((b) => b.isUpcoming() && !b.status.isFinal)
+        .length;
+    final book = ref.watch(addressBookProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpace.page, 4, AppSpace.page, 40),
-        children: [
-          const SizedBox(height: 8),
-          _ProfileHeader(
-            profile: p,
-            onEdit: () => _editProfile(context, ref, p),
-          ),
-          _title('Help & support'),
-          AppCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Column(children: [
-              InfoRow(
-                icon: Icons.chat_outlined,
-                label: 'WhatsApp · fastest reply',
-                value: 'Chat with us',
-                trailing: const Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textSubtle),
-                onTap: () => openWhatsApp(context),
+      backgroundColor: AppColors.bg,
+      body: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.15,
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.section),
+            children: [
+              Semantics(
+                  header: true, child: Text('Profile', style: AppText.h1)),
+              const SizedBox(height: AppSpace.lg),
+              _ProfileHeader(
+                profile: p,
+                onEdit: () => _editProfile(context, ref, p),
               ),
-              const Divider(),
-              InfoRow(
-                icon: Icons.mail_outline_rounded,
-                label: 'Email',
-                value: kEmail,
-                trailing: const Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textSubtle),
-                onTap: () => openLink(context, 'mailto:$kEmail'),
-              ),
-            ]),
-          ),
-          _title('Learn'),
-          AppCard(
-            onTap: () => context.push('/blog'),
-            child: Row(children: [
-              const IconBadge(Icons.menu_book_outlined),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Car care tips', style: AppText.bodyStrong),
-                      Text('Guides from the CleanCruisers team',
-                          style: AppText.small),
-                    ]),
-              ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: AppColors.textSubtle),
-            ]),
-          ),
-          _title('About CleanCruisers'),
-          AppCard(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                ClipOval(
-                    child: Image.asset('assets/images/logo.png',
-                        width: 48, height: 48)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('CleanCruisers', style: AppText.h3),
-                        Text(
-                          'Doorstep car wash & detailing'
-                          '${kEstablished != null ? ' · since $kEstablished' : ''}',
-                          style: AppText.caption,
-                        ),
-                      ]),
+              const SizedBox(height: AppSpace.md),
+              _Group(rows: [
+                _Row(
+                  icon: Icons.directions_car_outlined,
+                  title: 'My car',
+                  line: p.car == null
+                      ? 'Not added yet'
+                      : p.carModel.isEmpty
+                          ? carTypeNames[p.car]!
+                          : '${p.carModel} · ${carTypeNames[p.car]}',
+                  onTap: () => showCarSheet(context, ref),
+                ),
+                _Row(
+                  icon: Icons.location_on_outlined,
+                  title: 'My addresses',
+                  line: book.items.isEmpty
+                      ? 'Add an address'
+                      : book.items
+                          .map((a) => addressLabelNames[a.label])
+                          .join(', '),
+                  onTap: () => context.push('/addresses'),
+                ),
+                _Row(
+                  icon: Icons.event_note_outlined,
+                  title: 'My bookings',
+                  line:
+                      upcoming == 0 ? 'Track and manage' : '$upcoming upcoming',
+                  onTap: () => context.go('/bookings'),
+                ),
+                _Row(
+                  icon: Icons.local_offer_outlined,
+                  tint: true,
+                  title: 'CleanCredit and offers',
+                  line: 'Credit ${rupees(ref.watch(walletProvider).balance)} · '
+                      'see your offers',
+                  onTap: () => context.go('/wallet'),
                 ),
               ]),
-              const SizedBox(height: 14),
-              Text(
-                'We bring professional car cleaning to your home, office or society in $kCityLabel. '
-                'Our team arrives with foam shampoo, high-pressure equipment and polishing tools, '
-                'and cleans your car where it\'s parked.',
-                style: AppText.small,
-              ),
-              const SizedBox(height: 8),
-              const Divider(),
-              const InfoRow(
+              _title('HELP'),
+              _Group(rows: [
+                _Row(
+                  icon: Icons.chat_outlined,
+                  tint: true,
+                  title: 'WhatsApp',
+                  line: 'Fastest reply',
+                  onTap: () => openWhatsApp(context),
+                ),
+                _Row(
+                  icon: Icons.mail_outline_rounded,
+                  title: 'Email',
+                  line: kEmail,
+                  onTap: () => openLink(context, 'mailto:$kEmail'),
+                ),
+                _Row(
+                  icon: Icons.menu_book_outlined,
+                  title: 'Car care tips',
+                  line: 'Guides from the CleanCruisers team',
+                  onTap: () => context.push('/blog'),
+                ),
+              ]),
+              _title('ABOUT'),
+              _Group(rows: [
+                const _Row(
                   icon: Icons.schedule_rounded,
-                  label: 'Service hours',
-                  value: '$kHoursLabel · $kDaysLabel'),
-              const SizedBox(height: 6),
+                  title: 'Service hours',
+                  line: '$kDaysLabel, $kHoursLabel',
+                ),
+                _Row(
+                  icon: Icons.place_outlined,
+                  title: 'Areas we serve',
+                  line: kServiceAreas.join(', '),
+                ),
+                _Row(
+                  icon: Icons.public_rounded,
+                  title: 'Website',
+                  line: kWebsite.replaceFirst('https://', ''),
+                  onTap: () => openLink(context, kWebsite),
+                ),
+              ]),
+              const SizedBox(height: AppSpace.md),
               const Wrap(spacing: 8, runSpacing: 8, children: [
                 _SocialChip('Instagram', kInstagram),
                 _SocialChip('Facebook', kFacebook),
                 _SocialChip('LinkedIn', kLinkedIn),
-                _SocialChip('Website', kWebsite),
               ]),
-            ]),
+              const SizedBox(height: AppSpace.xl),
+              if (ref.watch(bookingCloudProvider).customerSignedIn)
+                OutlinedButton(
+                  onPressed: () => _logout(context, ref),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    foregroundColor: AppColors.error,
+                    backgroundColor: AppColors.surface,
+                    side: const BorderSide(color: AppColors.border),
+                    textStyle: AppText.bodyStrong,
+                  ),
+                  child: const Text('Log out'),
+                ),
+              const SizedBox(height: AppSpace.lg),
+              Center(
+                child: Text(
+                    'CleanCruisers'
+                    '${kEstablished != null ? ' · serving $kCityLabel since $kEstablished' : ''}'
+                    ' · v1.0.0',
+                    textAlign: TextAlign.center,
+                    style: AppText.caption),
+              ),
+              Center(
+                child: TextButton(
+                  onPressed: () => context.push('/ops/login'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSubtle,
+                      minimumSize: const Size(0, 44)),
+                  child: const Text('Team sign in'),
+                ),
+              ),
+            ],
           ),
-          _title('Areas we serve'),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final a in kServiceAreas) Pill(a, icon: Icons.place_outlined),
-          ]),
-          const SizedBox(height: 28),
-          if (ref.watch(bookingCloudProvider).customerSignedIn)
-            SecondaryButton(
-              label: 'Log out',
-              icon: Icons.logout_rounded,
-              onPressed: () => _logout(context, ref),
-            ),
-          const SizedBox(height: 20),
-          Center(
-              child:
-                  Text('CleanCruisers app · v1.0.0', style: AppText.caption)),
-          Center(
-            child: TextButton(
-              onPressed: () => context.push('/ops/login'),
-              style:
-                  TextButton.styleFrom(foregroundColor: AppColors.textSubtle),
-              child: const Text('Team sign in'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _title(String t) => Padding(
-        padding: const EdgeInsets.only(top: 24, bottom: 10),
-        child: Semantics(header: true, child: Text(t, style: AppText.h3)),
+        padding: const EdgeInsets.fromLTRB(4, 24, 4, 8),
+        child: Semantics(header: true, child: Text(t, style: AppText.overline)),
       );
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
@@ -176,7 +200,10 @@ class ProfileScreen extends ConsumerWidget {
     final result = await showModalBottomSheet<CustomerProfile>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _EditProfileSheet(initial: p),
+      showDragHandle: true,
+      builder: (_) => _EditProfileSheet(
+          initial: p,
+          phoneIsLogin: ref.read(bookingCloudProvider).verifiedPhone != null),
     );
     if (result != null) {
       await ref.read(profileProvider.notifier).save(result);
@@ -205,7 +232,10 @@ class _SocialChip extends StatelessWidget {
 
 class _EditProfileSheet extends StatefulWidget {
   final CustomerProfile initial;
-  const _EditProfileSheet({required this.initial});
+
+  /// Signed in with OTP: the number is the login and isn't edited here.
+  final bool phoneIsLogin;
+  const _EditProfileSheet({required this.initial, this.phoneIsLogin = false});
 
   @override
   State<_EditProfileSheet> createState() => _EditProfileSheetState();
@@ -244,22 +274,30 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             decoration: const InputDecoration(labelText: 'Full name'),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: 'Mobile number',
-              prefixText: '+91  ',
-              errorText: _submitted && !_phoneOk
-                  ? 'Enter a valid 10-digit mobile number'
-                  : null,
+          if (!widget.phoneIsLogin)
+            TextField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Mobile number',
+                prefixText: '+91  ',
+                errorText: _submitted && !_phoneOk
+                    ? 'Enter a valid 10-digit mobile number'
+                    : null,
+              ),
             ),
-          ),
+          if (widget.phoneIsLogin)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  'Your phone number is your login. To change it, chat with us.',
+                  style: AppText.caption),
+            ),
           const SizedBox(height: 16),
           Text('Car size', style: AppText.smallStrong),
           const SizedBox(height: 8),
@@ -269,17 +307,21 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 label: Text(carTypeNames[c]!),
                 selected: _car == c,
                 onSelected: (_) => setState(() => _car = c),
-                selectedColor: AppColors.primarySoft,
+                selectedColor: AppColors.ink,
+                showCheckmark: false,
+                labelStyle: AppText.smallStrong
+                    .copyWith(color: _car == c ? Colors.white : AppColors.text),
                 side: BorderSide(
-                    color: _car == c ? AppColors.primary : AppColors.border),
+                    color: _car == c ? AppColors.ink : AppColors.border),
               ),
           ]),
           const SizedBox(height: 12),
           TextField(
             controller: _model,
             textCapitalization: TextCapitalization.words,
-            decoration:
-                const InputDecoration(labelText: 'Car make & model (optional)'),
+            decoration: const InputDecoration(
+                labelText: 'Model and colour (optional)',
+                hintText: 'e.g. White Swift'),
           ),
           const SizedBox(height: 22),
           PrimaryButton(
@@ -315,93 +357,140 @@ class _ProfileHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cloud = ref.watch(bookingCloudProvider);
-    final name = cloud.customerName ?? profile.name;
+    final name = (cloud.customerName ?? profile.name).trim();
     final phone = cloud.verifiedPhone ?? profile.phone;
-    final p = profile;
-    return Column(children: [
-      AppCard(
+    final initials = name.isEmpty
+        ? '?'
+        : name
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .take(2)
+            .map((w) => w[0].toUpperCase())
+            .join();
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
         color: AppColors.ink,
-        padding: const EdgeInsets.all(18),
-        child: Row(children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: AppColors.brand,
-            child: Text(
-                name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
-                style: AppText.h1.copyWith(color: AppColors.ink)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name.trim().isEmpty ? 'Welcome' : name,
-                  style: AppText.h2.copyWith(color: Colors.white)),
-              if (phone.isNotEmpty)
-                Row(children: [
-                  Text(phoneLabel(phone),
-                      style: AppText.small.copyWith(color: Colors.white70)),
-                  if (cloud.verifiedPhone != null) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.verified_rounded,
-                        size: 15, color: AppColors.brand),
-                  ],
-                ]),
-            ]),
-          ),
-          IconButton(
-            tooltip: 'Edit details',
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, color: Colors.white),
-          ),
-        ]),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
-      const SizedBox(height: 10),
-      AppCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Column(children: [
-          InfoRow(
-            icon: Icons.directions_car_outlined,
-            label: 'My car',
-            value: p.car == null
-                ? 'Not added yet'
-                : p.carModel.isEmpty
-                    ? carTypeNames[p.car]!
-                    : '${p.carModel} · ${carTypeNames[p.car]}',
-            trailing: const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textSubtle),
-            onTap: onEdit,
-          ),
-          const Divider(),
-          InfoRow(
-            icon: Icons.location_on_outlined,
-            label: 'My addresses',
-            value: p.address.isEmpty ? 'Add an address' : p.address,
-            trailing: const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textSubtle),
-            onTap: () => showAddressSheet(context, ref),
-          ),
-          const Divider(),
-          InfoRow(
-            icon: Icons.event_note_outlined,
-            label: 'My bookings',
-            value: 'Track and manage',
-            trailing: const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textSubtle),
-            onTap: () => context.go('/bookings'),
-          ),
-          const Divider(),
-          Consumer(
-            builder: (context, ref, _) => InfoRow(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'CleanCredit & offers',
-              value: rupees(ref.watch(walletProvider).balance),
-              trailing: const Icon(Icons.chevron_right_rounded,
-                  color: AppColors.textSubtle),
-              onTap: () => context.go('/wallet'),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 28,
+          backgroundColor: AppColors.brand,
+          child:
+              Text(initials, style: AppText.h2.copyWith(color: AppColors.ink)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name.isEmpty ? 'Welcome' : name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.h3.copyWith(color: Colors.white)),
+            if (phone.isNotEmpty)
+              Row(children: [
+                Text(phoneLabel(phone),
+                    style:
+                        AppText.small.copyWith(color: const Color(0xFFB8C0C7))),
+                if (cloud.verifiedPhone != null) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.verified_rounded,
+                      size: 15, color: AppColors.brand),
+                ],
+              ]),
+          ]),
+        ),
+        Semantics(
+          button: true,
+          label: 'Edit your details',
+          child: ExcludeSemantics(
+            child: OutlinedButton(
+              onPressed: onEdit,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                foregroundColor: Colors.white,
+                backgroundColor: const Color(0xFF141B1D),
+                side: const BorderSide(color: Color(0xFF2A3336)),
+                textStyle: AppText.smallStrong,
+              ),
+              child: const Text('Edit'),
             ),
           ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// A white card of rows with hairlines between them.
+class _Group extends StatelessWidget {
+  final List<_Row> rows;
+  const _Group({required this.rows});
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        radius: AppRadius.lg,
+        padding: EdgeInsets.zero,
+        child: Column(children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const Divider(height: 1, indent: 66),
+            rows[i],
+          ],
         ]),
-      ),
-    ]);
+      );
+}
+
+class _Row extends StatelessWidget {
+  final IconData icon;
+  final String title, line;
+  final VoidCallback? onTap;
+  final bool tint;
+  const _Row({
+    required this.icon,
+    required this.title,
+    required this.line,
+    this.onTap,
+    this.tint = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.lg, vertical: AppSpace.md),
+      child: Row(children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: tint ? AppColors.primarySoft : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          child: Icon(icon,
+              size: 19, color: tint ? AppColors.primary : AppColors.text),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: AppText.title),
+            Text(line,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.small),
+          ]),
+        ),
+        if (onTap != null)
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textSubtle),
+      ]),
+    );
+    if (onTap == null) return row;
+    return Semantics(
+      button: true,
+      label: '$title. $line',
+      child: ExcludeSemantics(child: InkWell(onTap: onTap, child: row)),
+    );
   }
 }

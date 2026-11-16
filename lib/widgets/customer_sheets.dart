@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 import '../core/scheduling.dart';
 import '../core/theme.dart';
 import '../data/business_info.dart';
@@ -376,7 +377,9 @@ class _CoverageHint extends StatelessWidget {
 // ── Sheets ────────────────────────────────────────────────────────────────────
 
 Future<void> _sheet(BuildContext context,
-        {required String title, required WidgetBuilder body}) =>
+        {required String title,
+        String? subtitle,
+        required WidgetBuilder body}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -390,6 +393,10 @@ Future<void> _sheet(BuildContext context,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(title, style: AppText.h2),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: AppText.small),
+                ],
                 const SizedBox(height: AppSpace.lg),
                 body(ctx),
               ]),
@@ -404,7 +411,8 @@ Future<void> showCarSheet(BuildContext context, WidgetRef ref) {
   final model = TextEditingController(text: p.carModel);
   return _sheet(
     context,
-    title: 'Your vehicle',
+    title: 'Which car is it?',
+    subtitle: 'Prices depend on the size of your car.',
     body: (ctx) => StatefulBuilder(
       builder: (ctx, setState) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -418,13 +426,14 @@ Future<void> showCarSheet(BuildContext context, WidgetRef ref) {
             controller: model,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
-              hintText: 'Model & colour (optional), e.g. White Brezza',
+              labelText: 'Model and colour (optional)',
+              hintText: 'e.g. White Brezza',
               prefixIcon: Icon(Icons.directions_car_outlined),
             ),
           ),
           const SizedBox(height: AppSpace.lg),
           PrimaryButton(
-            label: 'Save vehicle',
+            label: 'Save',
             onPressed: car == null
                 ? null
                 : () async {
@@ -496,7 +505,9 @@ class CoverageChip extends StatelessWidget {
   }
 }
 
-/// "Where's your car?" — saved addresses, current location, add new.
+/// "Where's your car?" (v3): current location, saved addresses with
+/// coverage, add new, and a link to edit saved ones. An address we don't
+/// cover can't be picked; the sheet says why instead.
 /// Every place that changes the address opens this.
 Future<void> showAddressSheet(BuildContext context, WidgetRef ref) =>
     showModalBottomSheet<void>(
@@ -508,20 +519,27 @@ Future<void> showAddressSheet(BuildContext context, WidgetRef ref) =>
           Navigator.pop(ctx);
           showAddressForm(context, ref, locate: locate);
         },
-        onEdit: (a) {
+        onManage: () {
           Navigator.pop(ctx);
-          showAddressForm(context, ref, existing: a);
+          GoRouter.of(context).push('/addresses');
         },
       ),
     );
 
-class _AddressPicker extends ConsumerWidget {
+class _AddressPicker extends ConsumerStatefulWidget {
   final void Function({bool locate}) onAdd;
-  final ValueChanged<SavedAddress> onEdit;
-  const _AddressPicker({required this.onAdd, required this.onEdit});
+  final VoidCallback onManage;
+  const _AddressPicker({required this.onAdd, required this.onManage});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AddressPicker> createState() => _AddressPickerState();
+}
+
+class _AddressPickerState extends ConsumerState<_AddressPicker> {
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
     final book = ref.watch(addressBookProvider);
     final areas = ref.watch(serviceAreasProvider).valueOrNull ?? const [];
     final selected = book.selected?.id;
@@ -534,22 +552,29 @@ class _AddressPicker extends ConsumerWidget {
             AppSpace.page, 0, AppSpace.page, AppSpace.xxl),
         children: [
           Text('Where\'s your car?', style: AppText.h2),
-          const SizedBox(height: AppSpace.md),
-          _PickerAction(
-            icon: Icons.my_location_rounded,
-            label: 'Use my current location',
-            onTap: () => onAdd(locate: true),
-          ),
-          _PickerAction(
-            icon: Icons.add_rounded,
-            label: 'Add a new address',
-            onTap: () => onAdd(),
+          if (book.items.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text('For new bookings. A booked wash keeps its own address.',
+                style: AppText.small),
+          ],
+          const SizedBox(height: AppSpace.lg),
+          AppCard(
+            color: AppColors.primarySoft,
+            onTap: () => widget.onAdd(locate: true),
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Row(children: [
+              const Icon(Icons.my_location_rounded, color: AppColors.primary),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text('Use my current location',
+                    style: AppText.bodyStrong
+                        .copyWith(color: AppColors.primaryDk)),
+              ),
+            ]),
           ),
           if (book.items.isNotEmpty) ...[
             const SizedBox(height: AppSpace.lg),
-            Text('Saved addresses',
-                style:
-                    AppText.smallStrong.copyWith(color: AppColors.textMuted)),
+            Text('SAVED', style: AppText.overline),
             const SizedBox(height: AppSpace.sm),
             for (final a in book.items) ...[
               _AddressTile(
@@ -557,113 +582,113 @@ class _AddressPicker extends ConsumerWidget {
                 selected: a.id == selected,
                 coverage: addressCoverage(a, areas),
                 onTap: () async {
+                  if (addressCoverage(a, areas) == Coverage.notCovered) {
+                    setState(() => _error =
+                        'We don\'t wash cars at ${addressLabelNames[a.label]} '
+                            'yet. Pick another address.');
+                    return;
+                  }
                   await ref.read(addressBookProvider.notifier).select(a.id);
                   if (context.mounted) Navigator.pop(context);
                 },
-                onEdit: () => onEdit(a),
-                onDelete: () =>
-                    ref.read(addressBookProvider.notifier).remove(a.id),
               ),
               const SizedBox(height: AppSpace.sm),
             ],
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: Text(_error!,
+                    style: AppText.small.copyWith(
+                        color: AppColors.warning, fontWeight: FontWeight.w700)),
+              ),
           ],
+          const SizedBox(height: AppSpace.sm),
+          OutlinedButton.icon(
+            onPressed: () => widget.onAdd(),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add a new address'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: Color(0xFFB9C2BC), width: 1.5),
+              textStyle: AppText.bodyStrong,
+            ),
+          ),
+          if (book.items.isNotEmpty)
+            TextButton(
+              onPressed: widget.onManage,
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              child: const Text('Edit saved addresses'),
+            ),
         ],
       ),
     );
   }
 }
 
-class _PickerAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _PickerAction(
-      {required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: label,
-        child: ExcludeSemantics(
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Row(children: [
-                Icon(icon, color: AppColors.primary),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Text(label,
-                      style: AppText.bodyStrong
-                          .copyWith(color: AppColors.primary)),
-                ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textSubtle),
-              ]),
-            ),
-          ),
-        ),
-      );
-}
-
+/// A saved address as a radio card with its coverage.
 class _AddressTile extends StatelessWidget {
   final SavedAddress address;
   final bool selected;
   final Coverage coverage;
-  final VoidCallback onTap, onEdit, onDelete;
+  final VoidCallback onTap;
   const _AddressTile({
     required this.address,
     required this.selected,
     required this.coverage,
     required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     final a = address;
     return Semantics(
+      button: true,
       selected: selected,
-      child: AppCard(
-        selected: selected,
-        onTap: onTap,
-        padding:
-            const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.md, 0, AppSpace.md),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(addressLabelIcons[a.label], color: AppColors.primary),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Wrap(
-                  spacing: AppSpace.sm,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+      label: '${addressLabelNames[a.label]}, ${withParking(a.address, null)}',
+      child: ExcludeSemantics(
+        child: AppCard(
+          selected: selected,
+          color: AppColors.surface,
+          onTap: onTap,
+          padding: const EdgeInsets.all(AppSpace.md),
+          child: Row(children: [
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? AppColors.primary : null,
+                border: Border.all(
+                    color:
+                        selected ? AppColors.primary : const Color(0xFFB9C2BC),
+                    width: 2),
+              ),
+              child: selected
+                  ? Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: Colors.white, shape: BoxShape.circle))
+                  : null,
+            ),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(addressLabelNames[a.label]!,
-                        style: AppText.bodyStrong),
-                    CoverageChip(coverage),
+                    Text(addressLabelNames[a.label]!, style: AppText.title),
+                    Text(withParking(a.address, null),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.small),
                   ]),
-              const SizedBox(height: 2),
-              Text(withParking(a.address, null),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.small),
-            ]),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Edit or delete ${addressLabelNames[a.label]}',
-            icon: const Icon(Icons.more_vert_rounded,
-                color: AppColors.textSubtle),
-            onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('Edit')),
-              PopupMenuItem(value: 'delete', child: Text('Delete')),
-            ],
-          ),
-        ]),
+            ),
+            const SizedBox(width: AppSpace.sm),
+            CoverageChip(coverage),
+          ]),
+        ),
       ),
     );
   }
@@ -684,7 +709,11 @@ Future<void> showAddressForm(BuildContext context, WidgetRef ref,
   var pin = existing?.pin;
   return _sheet(
     context,
-    title: existing == null ? 'Add an address' : 'Edit address',
+    title: existing == null ? 'Add address' : 'Edit address',
+    subtitle: existing == null
+        ? null
+        : 'Saving changes your next bookings. A wash you have already '
+            'booked keeps the address it was booked with.',
     body: (ctx) => StatefulBuilder(
       builder: (ctx, setState) =>
           Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -693,17 +722,16 @@ Future<void> showAddressForm(BuildContext context, WidgetRef ref,
             ChoiceChip(
               avatar: Icon(addressLabelIcons[l],
                   size: 18,
-                  color:
-                      l == label ? AppColors.primaryDk : AppColors.textMuted),
+                  color: l == label ? Colors.white : AppColors.textMuted),
               label: Text(addressLabelNames[l]!),
               selected: l == label,
               showCheckmark: false,
-              selectedColor: AppColors.primarySoft,
+              selectedColor: AppColors.ink,
               backgroundColor: AppColors.surface,
               side: BorderSide(
-                  color: l == label ? AppColors.primary : AppColors.border),
-              labelStyle: AppText.smallStrong.copyWith(
-                  color: l == label ? AppColors.primaryDk : AppColors.text),
+                  color: l == label ? AppColors.ink : AppColors.border),
+              labelStyle: AppText.smallStrong
+                  .copyWith(color: l == label ? Colors.white : AppColors.text),
               onSelected: (_) => setState(() => label = l),
             ),
         ]),
