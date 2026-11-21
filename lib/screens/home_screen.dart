@@ -137,7 +137,12 @@ class _HeaderState extends ConsumerState<_Header> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _askedThisLaunch) return;
-      if (ref.read(addressBookProvider).items.isNotEmpty) return;
+      if (ref.read(addressBookProvider).items.isNotEmpty) {
+        // Once per launch: addresses the server doesn't have yet go up.
+        _askedThisLaunch = true;
+        ref.read(addressBookProvider.notifier).restoreFromServer();
+        return;
+      }
       _askedThisLaunch = true;
       showAddressSheet(context, ref);
     });

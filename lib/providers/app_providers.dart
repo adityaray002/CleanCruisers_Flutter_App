@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/api/address_convert.dart';
+import '../data/api/models.dart' show ApiCar;
 import '../models/address.dart';
 import '../models/booking.dart';
 import 'api_providers.dart';
@@ -19,7 +20,11 @@ class ProfileNotifier extends StateNotifier<CustomerProfile> {
   final SharedPreferences _prefs;
   static const _key = 'profile_v1';
 
-  ProfileNotifier(this._prefs) : super(_load(_prefs));
+  /// Called after a save with the old and new profile (sends name and car
+  /// to the server).
+  final void Function(CustomerProfile before, CustomerProfile after)? onSaved;
+
+  ProfileNotifier(this._prefs, {this.onSaved}) : super(_load(_prefs));
 
   static CustomerProfile _load(SharedPreferences p) {
     final raw = p.getString(_key);
@@ -32,8 +37,10 @@ class ProfileNotifier extends StateNotifier<CustomerProfile> {
   }
 
   Future<void> save(CustomerProfile p) async {
+    final before = state;
     state = p;
     await _prefs.setString(_key, jsonEncode(p.toJson()));
+    onSaved?.call(before, p);
   }
 
   Future<void> clear() async {
@@ -43,7 +50,23 @@ class ProfileNotifier extends StateNotifier<CustomerProfile> {
 }
 
 final profileProvider = StateNotifierProvider<ProfileNotifier, CustomerProfile>(
-    (ref) => ProfileNotifier(ref.watch(sharedPrefsProvider)));
+    (ref) => ProfileNotifier(ref.watch(sharedPrefsProvider), onSaved: (before, after) {
+          // The server keeps the name and car too (admin, invoices, a new
+          // phone). Best effort: the profile on the phone is already saved.
+          if (!ref.read(authServiceProvider).signedIn) return;
+          final name = after.name.trim();
+          final nameChanged = name.length >= 2 && name != before.name.trim();
+          final car = after.car;
+          final carChanged = car != null && (car != before.car || after.carModel != before.carModel);
+          if (!nameChanged && !carChanged) return;
+          ref
+              .read(apiProvider)
+              .updateMe(
+                name: nameChanged ? name : null,
+                car: carChanged ? ApiCar(car, after.carModel) : null,
+              )
+              .then((_) => ref.invalidate(meProvider), onError: (_) {});
+        }));
 
 /// The customer chose "Skip, just browsing" on the address step. They are
 /// not asked again on launch; booking asks for whatever is still missing.
@@ -180,7 +203,15 @@ class AddressBookNotifier extends StateNotifier<AddressBook> {
   /// A new phone: bring the account's saved addresses from the server.
   /// Does nothing if this phone already has addresses.
   Future<void> restoreFromServer() async {
-    if (state.items.isNotEmpty || !_ref.read(authServiceProvider).signedIn) return;
+    if (!_ref.read(authServiceProvider).signedIn) return;
+    if (state.items.isNotEmpty) {
+      // This phone has addresses: send any the server doesn't have yet
+      // (saved offline, or refused by an older server).
+      for (final a in [...state.items]) {
+        if (a.serverId == null) await _push(a);
+      }
+      return;
+    }
     try {
       final list = await _ref.read(apiProvider).addresses();
       if (list.isEmpty) return;

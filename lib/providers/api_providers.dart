@@ -3,7 +3,10 @@
 // Build flags:
 //   --dart-define=FAKE_SERVER=true        in-app fake ShineStaff + test login
 //                                         (OTP 123456); data kept on the phone
-//   --dart-define=API_BASE_URL=https://…  the real ShineStaff (step 4)
+//   --dart-define=API_BASE_URL=https://…  the real ShineStaff, Firebase OTP login
+//   + --dart-define=DEV_LOGIN=true        …with a test login instead of Firebase
+//                                         (any number, OTP 123456; the server
+//                                         must allow it: APP_AUTH_DEV=true)
 
 import 'dart:convert';
 
@@ -18,6 +21,7 @@ import 'app_providers.dart';
 
 const kFakeServer = bool.fromEnvironment('FAKE_SERVER');
 const kApiBaseUrl = String.fromEnvironment('API_BASE_URL');
+const kDevLogin = bool.fromEnvironment('DEV_LOGIN');
 
 const _fakeStateKey = 'fake_server_v1';
 
@@ -38,15 +42,20 @@ final fakeApiProvider = Provider<FakeApi>((ref) {
   return api;
 });
 
-final apiProvider = Provider<CleanCruisersApi>((ref) {
+final Provider<CleanCruisersApi> apiProvider = Provider<CleanCruisersApi>((ref) {
   if (kFakeServer) return ref.watch(fakeApiProvider);
-  return HttpApi(kApiBaseUrl);
+  return HttpApi(kApiBaseUrl,
+      token: ({bool refresh = false}) => ref.read(authServiceProvider).idToken(refresh: refresh));
 });
 
 /// Customer login: the fake OTP in test builds, Firebase otherwise.
-final authServiceProvider = Provider<AuthService>((ref) {
+final Provider<AuthService> authServiceProvider = Provider<AuthService>((ref) {
   if (kFakeServer) {
     return FakeAuthService(ref.watch(fakeApiProvider), ref.watch(sharedPrefsProvider));
+  }
+  if (kDevLogin) {
+    return DevAuthService(ref.watch(sharedPrefsProvider),
+        pushName: (name) => ref.read(apiProvider).updateMe(name: name));
   }
   return FirebaseAuthService();
 });

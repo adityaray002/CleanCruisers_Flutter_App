@@ -567,12 +567,10 @@ class _NameScreenState extends ConsumerState<NameScreen> {
             car: _car,
             carModel: _model.text.trim(),
           ));
-      if (kFakeServer) {
-        // The server keeps the car too (test builds; HttpApi in step 4).
-        await ref
-            .read(apiProvider)
-            .updateMe(car: ApiCar(_car!, _model.text.trim()));
-      }
+      // The server keeps the name and car (admin screens, invoices).
+      await ref
+          .read(apiProvider)
+          .updateMe(name: _name.text.trim(), car: ApiCar(_car!, _model.text.trim()));
       await auth.saveName(_name.text);
       ref.invalidate(meProvider);
       // The router moves on once the name is saved.

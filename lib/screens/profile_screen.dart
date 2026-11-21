@@ -171,7 +171,7 @@ class ProfileScreen extends ConsumerWidget {
                     textAlign: TextAlign.center,
                     style: AppText.caption),
               ),
-              if (ref.watch(authServiceProvider).isTestBuild) ...[
+              if (kFakeServer) ...[
                 Center(
                   child: TextButton.icon(
                     onPressed: () => context.push('/test-tools'),

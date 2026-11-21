@@ -7,6 +7,10 @@
 //   10-digit mobile number works and the OTP is always 123456, so the whole
 //   sign-up can be tried on a phone without Firebase. The login is kept
 //   across app restarts.
+// - DevAuthService: the real ShineStaff server without Firebase
+//   (--dart-define=API_BASE_URL=… --dart-define=DEV_LOGIN=true). Any number,
+//   OTP 123456, and the server must run with APP_AUTH_DEV=true, which
+//   ShineStaff refuses in production. For testing on a local or staging server.
 
 import 'dart:async';
 
@@ -67,7 +71,8 @@ abstract class AuthService {
   Future<void> signOut();
 
   /// The token the server checks on every call (contract §1), or null.
-  Future<String?> idToken();
+  /// [refresh]: the server refused the last one, get a fresh token.
+  Future<String?> idToken({bool refresh = false});
 }
 
 class FirebaseAuthService implements AuthService {
@@ -172,7 +177,7 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<String?> idToken() async => _user?.getIdToken();
+  Future<String?> idToken({bool refresh = false}) async => _user?.getIdToken(refresh);
 
   AuthException _error(Object e) {
     final code = e is FirebaseAuthException ? e.code : '';
@@ -251,7 +256,7 @@ class FakeAuthService implements AuthService {
   }
 
   @override
-  Future<String?> idToken() async => phone == null ? null : 'fake-token-$phone';
+  Future<String?> idToken({bool refresh = false}) async => phone == null ? null : 'fake-token-$phone';
 
   /// Test tools: wipe the fake server and log out.
   Future<void> resetTestData() async {
@@ -259,4 +264,66 @@ class FakeAuthService implements AuthService {
     await prefs.remove(_key);
     _changes.add(null);
   }
+}
+
+/// Dev login against a real ShineStaff server (see the file comment).
+class DevAuthService implements AuthService {
+  static const otp = '123456';
+  static const _phoneKey = 'dev_auth_phone';
+  static const _nameKey = 'dev_auth_name';
+  final SharedPreferences prefs;
+
+  /// Sends the name to the server (PUT /me); set by the provider.
+  final Future<void> Function(String name) pushName;
+  final _changes = StreamController<void>.broadcast();
+
+  DevAuthService(this.prefs, {required this.pushName});
+
+  @override
+  bool get available => true;
+  @override
+  bool get isTestBuild => true;
+  @override
+  bool get signedIn => phone != null;
+  @override
+  String? get phone => prefs.getString(_phoneKey);
+  @override
+  String? get name => prefs.getString(_nameKey);
+  @override
+  Stream<void> get changes => _changes.stream;
+
+  @override
+  Future<OtpSession> sendOtp(String phone, {OtpSession? resend}) async {
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(phone)) {
+      throw const AuthException("That mobile number doesn't look right.");
+    }
+    return OtpSession(phone: phone, verificationId: 'dev-$phone');
+  }
+
+  @override
+  Future<void> verifyOtp(OtpSession session, String code) async {
+    if (code != otp) {
+      throw const AuthException('That OTP is incorrect. Please check and try again.');
+    }
+    await prefs.setString(_phoneKey, session.phone);
+    await prefs.remove(_nameKey);
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> saveName(String name) async {
+    await pushName(name.trim());
+    await prefs.setString(_nameKey, name.trim());
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> signOut() async {
+    await prefs.remove(_phoneKey);
+    await prefs.remove(_nameKey);
+    _changes.add(null);
+  }
+
+  @override
+  Future<String?> idToken({bool refresh = false}) async => phone == null ? null : 'dev:$phone';
 }

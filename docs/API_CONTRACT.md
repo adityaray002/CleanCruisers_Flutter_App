@@ -65,7 +65,7 @@ Customer copy: "Expert arrives at 9:30 AM, car ready by about 11:30 AM".
   "label": "home",                 // home | work | other
   "flat": "B-12", "building": "Green Park Apartments", "area": "Pocket C, Janakpuri",
   "landmark": "near the gurudwara", "pincode": "110058",
-  "parking": "Basement parking",   // one of: Basement parking | Open parking | Outside the house | Office parking | null
+  "parking": "Basement Covered · P2 pillar 14",   // free text from the app, up to 80 characters, or null
   "pin": { "lat": 28.6219, "lng": 77.0878, "source": "gps" },  // source: gps | pasted; pin may be null
   "line": "B-12, Green Park Apartments, Pocket C, Janakpuri, near the gurudwara"  // server-built, read-only
 }
