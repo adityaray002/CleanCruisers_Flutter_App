@@ -1,3 +1,4 @@
+import '../providers/api_providers.dart';
 import '../core/scheduling.dart' show clockLabel;
 import '../data/api/models.dart' show Booking, BookingState;
 import '../providers/booking_providers.dart';
@@ -41,6 +42,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mine = ref.watch(myApiBookingsProvider).valueOrNull ?? MyBookings.none;
+    ref.watch(catalogProvider); // prices follow the server catalog
     final car = ref.watch(profileProvider).car;
     final live = mine.upcoming.firstOrNull;
     final isNew = mine.isEmpty;

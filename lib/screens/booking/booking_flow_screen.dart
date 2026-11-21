@@ -29,8 +29,11 @@ import 'booking_steps.dart';
 class BookingFlowScreen extends ConsumerStatefulWidget {
   final String serviceId;
   final CarType? initialCar;
+
+  /// Booking a visit of this monthly plan (contract §8): the wash is paid.
+  final String? planId;
   const BookingFlowScreen(
-      {super.key, required this.serviceId, this.initialCar});
+      {super.key, required this.serviceId, this.initialCar, this.planId});
 
   @override
   ConsumerState<BookingFlowScreen> createState() => _BookingFlowScreenState();
@@ -62,14 +65,18 @@ class _BookingFlowScreenState extends ConsumerState<BookingFlowScreen> {
   @override
   void initState() {
     super.initState();
+    // Keep this screen's draft alive while the catalog loads (nothing else
+    // watches it yet), so the car, plan and coupon set below aren't lost.
+    ref.listenManual(requestDraftProvider(widget.serviceId), (_, __) {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final p = ref.read(profileProvider);
       final car = widget.initialCar ?? p.car;
       if (car != null) _notifier.setCar(car, p.carModel);
+      if (widget.planId != null) _notifier.setPlan(widget.planId!);
       // A coupon tapped "Use" on in Offers: the server says if it applies.
       final picked = ref.read(pickedOfferProvider);
-      if (picked != null) _notifier.setCoupon(picked);
+      if (picked != null && widget.planId == null) _notifier.setCoupon(picked);
     });
     // Car changed from a sheet: use it for this booking too.
     ref.listenManual(profileProvider, (prev, p) {
@@ -203,6 +210,8 @@ class _BookingFlowScreenState extends ConsumerState<BookingFlowScreen> {
           .createBooking(r.forSubmit(clientRef: draft.clientRef, quote: quote));
       if (!mounted) return;
       ref.invalidate(meProvider);
+      ref.invalidate(myPlansProvider);
+      ref.invalidate(myApiBookingsProvider);
       if (r.couponCode != null && r.couponCode == ref.read(pickedOfferProvider)) {
         await ref.read(pickedOfferProvider.notifier).pick(null);
       }

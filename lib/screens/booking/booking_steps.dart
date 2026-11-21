@@ -577,34 +577,37 @@ class BillCard extends ConsumerWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         body,
         const SizedBox(height: AppSpace.sm),
-        Wrap(
-          spacing: AppSpace.md,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero, minimumSize: const Size(0, 44)),
-              onPressed: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                showDragHandle: true,
-                builder: (ctx) => CouponSheet(draft: draft, notifier: notifier),
-              ),
-              icon: const Icon(Icons.local_offer_outlined, size: 18),
-              label: Text(
-                  draft.couponCode == null ? 'Add coupon' : 'Change coupon'),
-            ),
-            if (balance > 0)
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('Use CleanCredit (${rupees(balance)})',
-                    style: AppText.small.copyWith(color: AppColors.text)),
-                Switch(
-                  value: draft.useCredit,
-                  onChanged: notifier.setUseCredit,
+        // Plan visits are already paid: no coupon or credit.
+        if (draft.planId == null)
+          Wrap(
+            spacing: AppSpace.md,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero, minimumSize: const Size(0, 44)),
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (ctx) =>
+                      CouponSheet(draft: draft, notifier: notifier),
                 ),
-              ]),
-          ],
-        ),
+                icon: const Icon(Icons.local_offer_outlined, size: 18),
+                label: Text(
+                    draft.couponCode == null ? 'Add coupon' : 'Change coupon'),
+              ),
+              if (balance > 0)
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('Use CleanCredit (${rupees(balance)})',
+                      style: AppText.small.copyWith(color: AppColors.text)),
+                  Switch(
+                    value: draft.useCredit,
+                    onChanged: notifier.setUseCredit,
+                  ),
+                ]),
+            ],
+          ),
       ]),
     );
   }
@@ -656,11 +659,14 @@ class _CouponSheetState extends ConsumerState<CouponSheet> {
       HapticFeedback.selectionClick();
       widget.notifier.setCoupon(code);
       Navigator.pop(context);
-      showMessage(context, '$code applied: ${rupees(q.bill.discountOf('coupon'))} off');
+      showMessage(
+          context, '$code applied: ${rupees(q.bill.discountOf('coupon'))} off');
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } on Object {
-      if (mounted) setState(() => _error = 'Couldn\'t check the code. Try again.');
+      if (mounted) {
+        setState(() => _error = 'Couldn\'t check the code. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _checking = null);
     }

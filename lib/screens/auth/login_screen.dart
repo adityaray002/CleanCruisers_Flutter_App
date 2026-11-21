@@ -656,6 +656,14 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
   late CarType? _car = _profile.car;
   bool _saving = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // A customer on a new phone: their saved addresses come back from the
+    // server; once one is selected the router moves on by itself.
+    ref.read(addressBookProvider.notifier).restoreFromServer();
+  }
+
   bool get _valid => _address.isNotEmpty && _car != null;
 
   Future<void> _save() async {

@@ -1,3 +1,4 @@
+import '../providers/api_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,6 +41,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(catalogProvider); // prices follow the server catalog
     final s = serviceById(widget.serviceId);
     if (s == null) {
       return Scaffold(

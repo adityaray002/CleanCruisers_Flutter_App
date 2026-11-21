@@ -1,8 +1,8 @@
 // Behaviour checks for the v3 redesign: package data the screens rely on,
 // the detailing "What's bothering you?" filter, the 3-step booking flow and
 // the "address in use" rule on My addresses.
+import 'package:cleancruisers_app/data/api/models.dart' show Booking;
 import 'package:cleancruisers_app/models/address.dart';
-import 'package:cleancruisers_app/models/booking.dart';
 import 'package:cleancruisers_app/models/service.dart';
 import 'package:cleancruisers_app/screens/addresses_screen.dart';
 import 'package:cleancruisers_app/screens/booking/booking_flow_screen.dart';
@@ -48,33 +48,43 @@ void main() {
   });
 
   group('AddressesScreen.bookingUsing', () {
-    final booking = BookingRecord.fromJson(sampleBooking);
     const home = SavedAddress(
         id: 'a1',
         label: AddressLabel.home,
-        address: 'B-12, Pocket 3, Janakpuri, near metro');
+        address: 'B-12, Pocket 3, Janakpuri · Parking: Basement parking');
     const work = SavedAddress(
         id: 'a2', label: AddressLabel.work, address: 'Plot 7, Okhla Phase 2');
 
-    test('finds the upcoming booking at that address', () {
-      expect(AddressesScreen.bookingUsing(home, [booking])?.ref, booking.ref);
+    Future<Booking> booking(Fx state) async {
+      final api = fixtureApi();
+      return api.booking(await fixtureBooking(api, state));
+    }
+
+    test('finds the upcoming booking at that address', () async {
+      final b = await booking(Fx.confirmed);
+      expect(AddressesScreen.bookingUsing(home, [b])?.ref, b.ref);
     });
 
-    test('ignores other addresses', () {
-      expect(AddressesScreen.bookingUsing(work, [booking]), isNull);
+    test('matches by the server id too', () async {
+      final b = await booking(Fx.requested);
+      final saved = SavedAddress(
+          id: 'x', label: AddressLabel.other, address: 'Somewhere else',
+          serverId: b.address.id);
+      expect(AddressesScreen.bookingUsing(saved, [b])?.ref, b.ref);
     });
 
-    test('ignores finished bookings', () {
-      final done = BookingRecord.fromJson({...sampleBooking, 'status': 'completed'});
-      expect(AddressesScreen.bookingUsing(home, [done]), isNull);
-      final cancelled =
-          BookingRecord.fromJson({...sampleBooking, 'status': 'cancelled'});
-      expect(AddressesScreen.bookingUsing(home, [cancelled]), isNull);
+    test('ignores other addresses', () async {
+      expect(AddressesScreen.bookingUsing(work, [await booking(Fx.requested)]), isNull);
     });
 
-    test('an empty address never matches', () {
+    test('ignores finished bookings', () async {
+      expect(AddressesScreen.bookingUsing(home, [await booking(Fx.completed)]), isNull);
+      expect(AddressesScreen.bookingUsing(home, [await booking(Fx.cancelled)]), isNull);
+    });
+
+    test('an empty address never matches', () async {
       const empty = SavedAddress(id: 'a3', label: AddressLabel.other, address: ' ');
-      expect(AddressesScreen.bookingUsing(empty, [booking]), isNull);
+      expect(AddressesScreen.bookingUsing(empty, [await booking(Fx.requested)]), isNull);
     });
   });
 

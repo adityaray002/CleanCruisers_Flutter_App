@@ -7,6 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'firebase_options.dart';
+import 'models/service.dart' show useServerPrices;
+import 'providers/api_providers.dart';
 import 'providers/app_providers.dart';
 
 void main() async {
@@ -38,6 +40,14 @@ class CleanCruisersApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Prices shown everywhere follow the server's catalog once it loads.
+    final c = ref.watch(catalogProvider).valueOrNull;
+    if (c != null) {
+      useServerPrices({
+        for (final s in c.services) s.id: s.prices,
+        for (final p in c.plans) p.id: p.prices,
+      });
+    }
     return MaterialApp.router(
       title: 'CleanCruisers',
       debugShowCheckedModeBanner: false,

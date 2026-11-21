@@ -5,7 +5,10 @@ import '../core/format.dart';
 import '../core/scheduling.dart' show Coverage;
 import '../core/theme.dart';
 import '../models/address.dart';
+import '../data/api/address_convert.dart';
+import '../data/api/models.dart' show Booking, BookingStateInfo;
 import '../models/booking.dart';
+import '../providers/booking_providers.dart';
 import '../providers/app_providers.dart';
 import '../widgets/customer_sheets.dart';
 import '../widgets/ui.dart';
@@ -17,12 +20,15 @@ import '../widgets/ui.dart';
 class AddressesScreen extends ConsumerWidget {
   const AddressesScreen({super.key});
 
-  /// The upcoming booking that uses [a], if any.
-  static BookingRecord? bookingUsing(SavedAddress a, List<BookingRecord> all) {
-    final line = a.address.trim();
-    if (line.isEmpty) return null;
+  /// The upcoming booking that uses [a], if any (by its server id, or the
+  /// same address line).
+  static Booking? bookingUsing(SavedAddress a, List<Booking> all) {
+    if (a.address.trim().isEmpty) return null;
     return all
-        .where((b) => !b.status.isFinal && b.address.contains(line))
+        .where((b) =>
+            b.status.isUpcoming &&
+            ((a.serverId != null && b.address.id == a.serverId) ||
+                sameAddressLine(a.address, b.address.line)))
         .firstOrNull;
   }
 
@@ -30,7 +36,8 @@ class AddressesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final book = ref.watch(addressBookProvider);
     final areas = ref.watch(serviceAreasProvider).valueOrNull ?? const [];
-    final bookings = ref.watch(myBookingsProvider);
+    final bookings =
+        ref.watch(myApiBookingsProvider).valueOrNull?.upcoming ?? const <Booking>[];
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -120,7 +127,7 @@ class AddressesScreen extends ConsumerWidget {
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref, SavedAddress a,
-      List<BookingRecord> bookings) async {
+      List<Booking> bookings) async {
     final name = addressLabelNames[a.label]!;
     final using = bookingUsing(a, bookings);
     if (using != null) {
@@ -128,7 +135,7 @@ class AddressesScreen extends ConsumerWidget {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('You can\'t delete this yet'),
-          content: Text('Your booking on ${friendlyDate(using.date)} uses this '
+          content: Text('Your booking on ${friendlyDate(using.slot.date)} uses this '
               'address. Change or cancel that booking first.'),
           actions: [
             TextButton(
@@ -181,7 +188,7 @@ class _AddressCard extends StatelessWidget {
   final SavedAddress address;
   final bool inUse;
   final Coverage coverage;
-  final BookingRecord? booking;
+  final Booking? booking;
   final VoidCallback onEdit, onDelete;
   const _AddressCard({
     required this.address,
@@ -218,7 +225,7 @@ class _AddressCard extends StatelessWidget {
           Text(parking, style: AppText.caption),
         if (booking != null) ...[
           const SizedBox(height: AppSpace.sm),
-          Pill('Booking on ${friendlyDate(booking!.date)} uses this address',
+          Pill('Booking on ${friendlyDate(booking!.slot.date)} uses this address',
               tone: PillTone.brand),
         ],
         const SizedBox(height: AppSpace.md),

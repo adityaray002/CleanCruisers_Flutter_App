@@ -14,6 +14,7 @@ import '../widgets/contact_actions.dart';
 import '../widgets/customer_sheets.dart';
 import '../widgets/ui.dart';
 import '../providers/api_providers.dart';
+import '../providers/booking_providers.dart';
 import '../data/auth_service.dart';
 
 /// Profile (v3 design): who you are, your car, addresses, bookings and
@@ -24,10 +25,10 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = ref.watch(profileProvider);
-    final upcoming = ref
-        .watch(myBookingsProvider)
-        .where((b) => b.isUpcoming() && !b.status.isFinal)
-        .length;
+    final upcoming =
+        ref.watch(myApiBookingsProvider).valueOrNull?.upcoming.length ?? 0;
+    final plans = ref.watch(myPlansProvider).valueOrNull ?? const [];
+    final credit = ref.watch(meProvider).valueOrNull?.walletBalance ?? 0;
     final book = ref.watch(addressBookProvider);
 
     return Scaffold(
@@ -76,13 +77,29 @@ class ProfileScreen extends ConsumerWidget {
                       upcoming == 0 ? 'Track and manage' : '$upcoming upcoming',
                   onTap: () => context.go('/bookings'),
                 ),
+                if (plans.isNotEmpty)
+                  _Row(
+                    icon: Icons.event_repeat_rounded,
+                    title: 'My plan',
+                    line: () {
+                      final p = plans.first;
+                      final left = p.visitsTotal - p.visitsUsed - p.visitsBooked;
+                      return '${p.name} · $left ${left == 1 ? 'visit' : 'visits'} left';
+                    }(),
+                    onTap: () => context.push('/plans'),
+                  ),
                 _Row(
                   icon: Icons.local_offer_outlined,
                   tint: true,
                   title: 'CleanCredit and offers',
-                  line: 'Credit ${rupees(ref.watch(walletProvider).balance)} · '
-                      'see your offers',
+                  line: 'Credit ${rupees(credit)} · see your offers',
                   onTap: () => context.go('/wallet'),
+                ),
+                _Row(
+                  icon: Icons.card_giftcard_rounded,
+                  title: 'Invite a friend',
+                  line: 'You both get ₹100',
+                  onTap: () => context.push('/referral'),
                 ),
               ]),
               _title('HELP'),

@@ -11,7 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/pricing.dart';
 import '../data/api/models.dart';
-import '../models/booking.dart' show CustomerProfile, newBookingRef, parkingOf, withParking;
+import '../data/api/address_convert.dart';
+import '../models/booking.dart' show CustomerProfile, newBookingRef;
 import 'api_providers.dart';
 import 'app_providers.dart';
 
@@ -29,6 +30,9 @@ class RequestDraft {
   final String? couponCode;
   final bool useCredit;
 
+  /// A visit of the customer's monthly plan (the service part is paid).
+  final String? planId;
+
   const RequestDraft({
     required this.clientRef,
     required this.serviceId,
@@ -39,6 +43,7 @@ class RequestDraft {
     this.start,
     this.couponCode,
     this.useCredit = true,
+    this.planId,
   });
 
   RequestDraft copyWith({
@@ -51,6 +56,7 @@ class RequestDraft {
     String? couponCode,
     bool clearCoupon = false,
     bool? useCredit,
+    String? planId,
   }) =>
       RequestDraft(
         clientRef: clientRef,
@@ -62,6 +68,7 @@ class RequestDraft {
         start: clearStart ? null : (start ?? this.start),
         couponCode: clearCoupon ? null : (couponCode ?? this.couponCode),
         useCredit: useCredit ?? this.useCredit,
+        planId: planId ?? this.planId,
       );
 
   bool get timePicked => date != null && start != null;
@@ -84,8 +91,9 @@ class RequestDraft {
       extras: extras,
       slot: SlotPick(date!, start!),
       address: address,
-      couponCode: couponCode,
-      useCredit: useCredit,
+      couponCode: planId == null ? couponCode : null,
+      useCredit: planId == null && useCredit,
+      planId: planId,
     );
   }
 }
@@ -114,6 +122,7 @@ class RequestDraftNotifier extends StateNotifier<RequestDraft> {
   void setCoupon(String? code) => state =
       code == null ? state.copyWith(clearCoupon: true) : state.copyWith(couponCode: code);
   void setUseCredit(bool use) => state = state.copyWith(useCredit: use);
+  void setPlan(String planId) => state = state.copyWith(planId: planId);
 }
 
 /// One draft per service, pre-filled with the customer's car.
@@ -128,39 +137,9 @@ final requestDraftProvider = StateNotifierProvider.autoDispose
   ));
 });
 
-/// Where the car is, as the server wants it. Until saved addresses move to
-/// the server (slice 5), it is read from the customer's saved address line:
-/// "flat, building, area, near landmark · Parking: …".
-ApiAddress? apiAddressOf(CustomerProfile p) {
-  final full = p.address.trim();
-  if (full.isEmpty) return null;
-  final parking = parkingOf(full);
-  final base = withParking(full, null);
-  final parts = base.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-  String landmark = '';
-  if (parts.length > 1 && parts.last.toLowerCase().startsWith('near ')) {
-    landmark = parts.removeLast().substring(5).trim();
-  }
-  final flat = parts.isEmpty ? base : parts.first;
-  final area = parts.length > 1 ? parts.last : base;
-  final building = parts.length > 2 ? parts.sublist(1, parts.length - 1).join(', ') : '';
-  final pincode = RegExp(r'\b\d{6}\b').firstMatch(base)?.group(0) ?? '';
-  ApiPin? pin;
-  final ll = p.pin?.split(',');
-  if (ll != null && ll.length == 2) {
-    final lat = double.tryParse(ll[0]), lng = double.tryParse(ll[1]);
-    if (lat != null && lng != null) pin = ApiPin(lat, lng, PinSource.pasted);
-  }
-  return ApiAddress(
-    flat: flat,
-    building: building,
-    area: area.length < 3 ? base : area,
-    landmark: landmark,
-    pincode: pincode,
-    parking: parking,
-    pin: pin,
-  );
-}
+/// Where the car is (the selected saved address), as the server wants it.
+ApiAddress? apiAddressOf(CustomerProfile p) =>
+    apiAddressFromLine(p.address, p.pin);
 
 typedef AvailabilityKey = (String serviceId, CarType car, String extras, String date);
 
@@ -203,6 +182,12 @@ class MyBookings {
   static const none = MyBookings([], []);
   bool get isEmpty => upcoming.isEmpty && past.isEmpty;
 }
+
+/// The customer's monthly plans (contract §8).
+final myPlansProvider = FutureProvider.autoDispose<List<Plan>>((ref) async {
+  if (!ref.watch(authServiceProvider).signedIn) return const [];
+  return ref.watch(apiProvider).plans();
+});
 
 /// The signed-in customer's bookings (contract `GET /bookings`). Logged
 /// out, or a build without a server: none. The shell refreshes it every
@@ -255,5 +240,6 @@ class _AutoRefreshState extends ConsumerState<AutoRefresh> {
 void refreshBooking(WidgetRef ref, String bookingRef) {
   ref.invalidate(apiBookingProvider(bookingRef));
   ref.invalidate(myApiBookingsProvider);
+  ref.invalidate(myPlansProvider);
   ref.invalidate(meProvider);
 }

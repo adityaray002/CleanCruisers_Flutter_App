@@ -1,3 +1,5 @@
+import '../data/api/address_convert.dart';
+import 'api_providers.dart';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -174,7 +176,8 @@ class AddressBookNotifier extends StateNotifier<AddressBook> {
         ));
   }
 
-  /// Adds [a], or replaces the saved one with the same id.
+  /// Adds [a], or replaces the saved one with the same id. The server gets
+  /// a copy (contract §4) so the address follows the account to a new phone.
   Future<void> save(SavedAddress a, {bool select = true}) async {
     final items = [
       for (final x in state.items)
@@ -186,6 +189,63 @@ class AddressBookNotifier extends StateNotifier<AddressBook> {
         AddressBook(items: items, selectedId: select ? a.id : state.selectedId);
     await _persist();
     await _syncProfile();
+    await _push(a);
+  }
+
+  /// Saves [a] on the server and remembers its server id. Offline or logged
+  /// out: the phone's copy stays and it is pushed on the next save.
+  Future<void> _push(SavedAddress a) async {
+    if (!_ref.read(authServiceProvider).signedIn) return;
+    final body = apiAddressFromLine(a.address, a.pin,
+        label: a.label.name,
+        isDefault: state.selectedId == a.id,
+        id: a.serverId);
+    if (body == null) return;
+    try {
+      final api = _ref.read(apiProvider);
+      final saved = a.serverId == null
+          ? await api.addAddress(body)
+          : await api.updateAddress(body);
+      if (saved.id != a.serverId) {
+        state = AddressBook(items: [
+          for (final x in state.items)
+            x.id == a.id ? x.copyWith(serverId: saved.id) : x,
+        ], selectedId: state.selectedId);
+        await _persist();
+      }
+    } on Object {
+      // Kept on the phone; tried again next time.
+    }
+  }
+
+  /// A new phone: bring the account's saved addresses from the server.
+  /// Does nothing if this phone already has addresses.
+  Future<void> restoreFromServer() async {
+    if (state.items.isNotEmpty || !_ref.read(authServiceProvider).signedIn) return;
+    try {
+      final list = await _ref.read(apiProvider).addresses();
+      if (list.isEmpty) return;
+      final items = [
+        for (final a in list)
+          SavedAddress(
+            id: 'srv-${a.id}',
+            label: AddressLabel.values
+                    .where((l) => l.name == a.label)
+                    .firstOrNull ??
+                AddressLabel.other,
+            address: lineOfApiAddress(a),
+            pin: pinOfApiAddress(a),
+            serverId: a.id,
+          ),
+      ];
+      final def = list.indexWhere((a) => a.isDefault);
+      state = AddressBook(
+          items: items, selectedId: items[def < 0 ? 0 : def].id);
+      await _persist();
+      await _syncProfile();
+    } on Object {
+      // No server copy reachable: the customer adds one as usual.
+    }
   }
 
   Future<void> select(String id) async {
@@ -195,6 +255,7 @@ class AddressBookNotifier extends StateNotifier<AddressBook> {
   }
 
   Future<void> remove(String id) async {
+    final gone = state.items.where((x) => x.id == id).firstOrNull;
     final items = [
       for (final x in state.items)
         if (x.id != id) x,
@@ -206,6 +267,14 @@ class AddressBookNotifier extends StateNotifier<AddressBook> {
     );
     await _persist();
     await _syncProfile();
+    final serverId = gone?.serverId;
+    if (serverId != null && _ref.read(authServiceProvider).signedIn) {
+      try {
+        await _ref.read(apiProvider).deleteAddress(serverId);
+      } on Object {
+        // An address a plan still uses stays on the server; nothing to show.
+      }
+    }
   }
 }
 

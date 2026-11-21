@@ -18,7 +18,12 @@ import 'package:cleancruisers_app/screens/home_screen.dart';
 import 'package:cleancruisers_app/screens/profile_screen.dart';
 import 'package:cleancruisers_app/screens/service_detail_screen.dart';
 import 'package:cleancruisers_app/screens/services_screen.dart';
+import 'package:cleancruisers_app/screens/plans_screen.dart';
+import 'package:cleancruisers_app/screens/referral_screen.dart';
 import 'package:cleancruisers_app/screens/test_tools_screen.dart';
+import 'package:cleancruisers_app/core/format.dart';
+import 'package:cleancruisers_app/core/pricing.dart';
+import 'package:cleancruisers_app/data/api/models.dart' show ApiCar, SlotPick;
 import 'package:cleancruisers_app/screens/wallet_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -158,5 +163,24 @@ void main() {
     await t.tap(find.text('Car parked at'));
     await t.pumpAndSettle();
   });
-  both('wallet', const WalletScreen(), 1400, prefs: profile);
+  withBooking('wallet', Fx.completed, (_) => const WalletScreen(), 1600);
+  withBooking('referral', Fx.requested, (_) => const ReferralScreen(), 1000);
+  final planApi = fixtureApi();
+  Future<String> planSetup() async {
+    final ref = await fixtureBooking(planApi, Fx.requested);
+    final a = (await planApi.addresses()).first;
+    final r = await planApi.buyPlan(
+        clientRef: 'PL-S', planId: 'monthly-3',
+        car: const ApiCar(CarType.hatchback, 'White Swift'), addressId: a.id!,
+        firstVisit: SlotPick(addDays(dateOnly(DateTime.now()), 2), 9 * 60));
+    planApi.adminConfirm(r.booking.ref);
+    planApi.adminOnTheWay(r.booking.ref);
+    planApi.adminStart(r.booking.ref);
+    planApi.adminComplete(r.booking.ref);
+    return ref;
+  }
+  final planReady = planSetup();
+  both('plans', FutureBuilder(future: planReady,
+      builder: (_, s) => s.hasData ? const PlansScreen() : const SizedBox()), 1000,
+      prefs: profile, overrides: fakeOverrides(planApi));
 }

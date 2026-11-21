@@ -1,3 +1,8 @@
+import 'package:cleancruisers_app/core/format.dart';
+import 'package:cleancruisers_app/core/pricing.dart';
+import 'package:cleancruisers_app/data/api/models.dart' show ApiCar, SlotPick;
+import 'package:cleancruisers_app/screens/plans_screen.dart';
+import 'package:cleancruisers_app/screens/referral_screen.dart';
 import 'package:cleancruisers_app/core/theme.dart';
 import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
 import 'package:cleancruisers_app/data/auth_service.dart';
@@ -188,6 +193,28 @@ void main() {
           await tester.tap(find.textContaining('Past'));
           await tester.pump(const Duration(milliseconds: 300));
         }
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    // Offers, referral and plans with real data on the test-build server.
+    for (final (name, screen) in [
+      ('Offers (with credit)', const WalletScreen()),
+      ('Invite a friend', const ReferralScreen()),
+      ('My plans', const PlansScreen()),
+    ]) {
+      testWidgets('$name has no overflow at text scale $scale', (tester) async {
+        final api = fixtureApi();
+        await fixtureBooking(api, Fx.completed);
+        final a = (await api.addresses()).first;
+        await api.buyPlan(
+            clientRef: 'PL-L', planId: 'monthly-3',
+            car: const ApiCar(CarType.hatchback, 'White Swift'), addressId: a.id!,
+            firstVisit: SlotPick(addDays(dateOnly(DateTime.now()), 2), 9 * 60));
+        await pumpAt(tester, screen,
+            textScale: scale, saved: profile, overrides: fakeOverrides(api));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
         expect(tester.takeException(), isNull);
       });
     }

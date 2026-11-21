@@ -99,9 +99,13 @@ class CarService {
   String? get cardPhoto => cardImage ?? image;
   bool get cardPhotoHasLogo => _brandedPhotos.contains(cardPhoto);
 
-  int priceFor(CarType car) => prices[car] ?? 0;
-  int get fromPrice => prices.values.reduce((a, b) => a < b ? a : b);
-  bool get samePriceForAll => prices.values.toSet().length == 1;
+  /// Today's prices: the server's catalog once it has loaded
+  /// ([useServerPrices]), else the bundled [prices].
+  Map<CarType, int> get livePrices => _serverPrices[id] ?? prices;
+
+  int priceFor(CarType car) => livePrices[car] ?? 0;
+  int get fromPrice => livePrices.values.reduce((a, b) => a < b ? a : b);
+  bool get samePriceForAll => livePrices.values.toSet().length == 1;
 
   /// Optional extras that can be added to this service.
   List<Extra> get extras {
@@ -398,6 +402,15 @@ final serviceCatalog = <CarService>[
     priceSuffix: '/month',
   ),
 ];
+
+/// Prices from the server catalog (docs/API_CONTRACT.md `GET /catalog`),
+/// by service or plan id. Empty until it loads; the bundled prices are the
+/// fallback (e.g. offline at first start).
+final _serverPrices = <String, Map<CarType, int>>{};
+
+void useServerPrices(Map<String, Map<CarType, int>> byId) => _serverPrices
+  ..clear()
+  ..addAll(byId);
 
 CarService? serviceById(String id) =>
     serviceCatalog.where((s) => s.id == id).firstOrNull;

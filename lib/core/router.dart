@@ -18,7 +18,9 @@ import '../screens/home_screen.dart';
 import '../screens/main_shell.dart';
 import '../screens/ops/ops_dashboard_screen.dart';
 import '../screens/ops/ops_login_screen.dart';
+import '../screens/plans_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/referral_screen.dart';
 import '../screens/service_detail_screen.dart';
 import '../screens/services_screen.dart';
 import '../screens/splash_screen.dart';
@@ -156,6 +158,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return BookingFlowScreen(
             serviceId: s.pathParameters['id']!,
             initialCar: CarType.values.where((c) => c.name == car).firstOrNull,
+            planId: s.uri.queryParameters['plan'],
           );
         },
       ),
@@ -170,6 +173,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             BookingDetailScreen(bookingRef: s.pathParameters['ref']!),
       ),
       GoRoute(path: '/addresses', builder: (_, __) => const AddressesScreen()),
+      GoRoute(path: '/plans', builder: (_, __) => const PlansScreen()),
+      GoRoute(path: '/referral', builder: (_, __) => const ReferralScreen()),
       GoRoute(path: '/blog', builder: (_, __) => const BlogListScreen()),
       GoRoute(
         path: '/blog/:id',
