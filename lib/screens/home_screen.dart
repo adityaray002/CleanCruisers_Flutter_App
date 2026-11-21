@@ -529,7 +529,7 @@ class _CategoryCard extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: AppText.title),
+                      Text(title, style: AppText.h3),
                       const SizedBox(height: 2),
                       Text(line, style: AppText.small),
                       const SizedBox(height: 2),

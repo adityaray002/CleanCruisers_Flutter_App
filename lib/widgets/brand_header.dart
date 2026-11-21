@@ -56,6 +56,12 @@ class CarPill extends ConsumerWidget {
     final label = model.isNotEmpty
         ? model.split(' ').last
         : (p.car == null ? 'Your car' : carTypeNames[p.car]!);
+    // On narrow phones with no car picked, drop "Your car" so the location
+    // CTA beside it fits. Home also has a "Choose car" link under the
+    // section heading, so nothing is lost.
+    final roomy = MediaQuery.sizeOf(context).width /
+        MediaQuery.textScalerOf(context).scale(1);
+    final iconOnly = p.car == null && roomy < 380;
     return Semantics(
       button: true,
       label: p.car == null
@@ -70,13 +76,16 @@ class CarPill extends ConsumerWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.directions_car_outlined,
                   size: 18, color: AppColors.primary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.smallStrong.copyWith(color: AppColors.text)),
-              ),
+              if (!iconOnly) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          AppText.smallStrong.copyWith(color: AppColors.text)),
+                ),
+              ],
               const Icon(Icons.keyboard_arrow_down_rounded,
                   size: 18, color: AppColors.textMuted),
             ]),
@@ -134,7 +143,7 @@ class ParkedAtLine extends ConsumerWidget {
     final color = sel == null ? AppColors.primary : AppColors.textMuted;
     if (withOverline) {
       final short =
-          sel == null ? 'Set your location' : '$place · ${sel.address}';
+          sel == null ? 'Set location' : '$place · ${sel.address}';
       return Semantics(
         button: true,
         label: sel == null
