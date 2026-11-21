@@ -70,13 +70,6 @@ void main() {
         (const ServiceDetailScreen(serviceId: 'monthly-3'), const {}),
     'Service detail (full detailing)':
         (const ServiceDetailScreen(serviceId: 'full-package'), const {}),
-    'Booking flow': (const BookingFlowScreen(serviceId: 'monthly-3'), const {}),
-    'Booking flow (extras)':
-        (const BookingFlowScreen(serviceId: 'wash-full'), profile),
-    'Booking sent': (
-      const BookingSentScreen(bookingRef: ref),
-      bookingPrefs(confirmed: false)
-    ),
     'Bookings (empty)': (const BookingsScreen(), const {}),
     'Bookings (upcoming)': (const BookingsScreen(), bookingPrefs()),
     'Booking detail (waiting)': (
@@ -124,6 +117,66 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    // Booking flow on the test-build server (contract §5).
+    Future<void> step(WidgetTester t, String text) async {
+      await t.tap(find.text(text).last);
+      for (var i = 0; i < 5; i++) {
+        await t.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    final flows = <String, (Widget, Future<void> Function(WidgetTester)?)>{
+      'Booking flow (plan)': (const BookingFlowScreen(serviceId: 'monthly-3'), null),
+      'Booking flow (extras)': (const BookingFlowScreen(serviceId: 'wash-full'), null),
+      'Booking flow: time': (
+        const BookingFlowScreen(serviceId: 'wash-full'),
+        (t) async {
+          await step(t, 'Continue');
+          await step(t, 'Tmrw');
+          await step(t, '9:00 AM');
+        }
+      ),
+      'Booking flow: review': (
+        const BookingFlowScreen(serviceId: 'wash-full'),
+        (t) async {
+          await step(t, 'Continue');
+          await step(t, 'Tmrw');
+          await step(t, '9:00 AM');
+          await step(t, 'Continue');
+        }
+      ),
+      'Booking flow: plan review': (
+        const BookingFlowScreen(serviceId: 'monthly-3'),
+        (t) async {
+          await step(t, 'Tmrw');
+          await step(t, '9:00 AM');
+          await step(t, 'Continue');
+        }
+      ),
+    };
+    for (final e in flows.entries) {
+      testWidgets('${e.key} has no overflow at text scale $scale', (tester) async {
+        final (screen, interact) = e.value;
+        await pumpAt(tester, screen,
+            textScale: scale, saved: profile, overrides: fakeOverrides(fixtureApi()));
+        if (interact != null) await interact(tester);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('Booking sent has no overflow at text scale $scale', (tester) async {
+      final api = fixtureApi();
+      await pumpAt(
+          tester,
+          AfterRequest(api: api, then: (ref) => BookingSentScreen(bookingRef: ref)),
+          textScale: scale,
+          saved: profile,
+          overrides: fakeOverrides(api));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Slot requested'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('Splash renders at text scale $scale, then goes home',
         (tester) async {

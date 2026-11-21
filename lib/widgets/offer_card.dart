@@ -1,3 +1,4 @@
+import '../data/api/models.dart' show PublicOffer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme.dart';
@@ -7,7 +8,8 @@ import 'ui.dart';
 /// A coupon as a ticket: big "₹40 OFF" stub on the left, the rules and the
 /// code (tap to copy) on the right, and one action (Use / Apply / Applied).
 class OfferCard extends StatelessWidget {
-  final Offer offer;
+  final String code, title, headline;
+  final List<String> conditions;
 
   /// Why it can't be used now ('Add ₹50 more…'); shown instead of the action.
   final String? blockedReason;
@@ -15,14 +17,30 @@ class OfferCard extends StatelessWidget {
   final String actionLabel;
   final VoidCallback? onAction;
 
-  const OfferCard({
+  OfferCard({
     super.key,
-    required this.offer,
+    required Offer offer,
     this.blockedReason,
     this.applied = false,
     required this.actionLabel,
     this.onAction,
-  });
+  })  : code = offer.code,
+        title = offer.title,
+        headline = offer.headline,
+        conditions = offer.conditions;
+
+  /// An offer from the server (contract `GET /offers`).
+  OfferCard.public({
+    super.key,
+    required PublicOffer offer,
+    this.blockedReason,
+    this.applied = false,
+    required this.actionLabel,
+    this.onAction,
+  })  : code = offer.code,
+        title = offer.title,
+        headline = offer.headline,
+        conditions = offer.conditions;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +70,7 @@ class OfferCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
                 alignment: Alignment.center,
                 child: Text(
-                  offer.headline.replaceFirst(' ', '\n'),
+                  headline.replaceFirst(' ', '\n'),
                   textAlign: TextAlign.center,
                   style: AppText.h3.copyWith(color: Colors.white, height: 1.1),
                 ),
@@ -69,16 +87,16 @@ class OfferCard extends StatelessWidget {
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(offer.title, style: AppText.bodyStrong),
+                              Text(title, style: AppText.bodyStrong),
                               // When blocked, the reason below says it.
-                              if (offer.conditions.isNotEmpty && !off)
-                                Text(offer.conditions.join(' · '),
+                              if (conditions.isNotEmpty && !off)
+                                Text(conditions.join(' · '),
                                     style: AppText.caption),
                             ]),
                       ),
                       const SizedBox(height: AppSpace.sm),
                       Row(children: [
-                        Opacity(opacity: fade, child: _CopyCode(offer.code)),
+                        Opacity(opacity: fade, child: _CopyCode(code)),
                         const Spacer(),
                         if (!off) _action(),
                       ]),

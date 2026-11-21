@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../data/api/models.dart' show BookingState;
 import '../models/booking.dart';
 
 const _steps = ['Requested', 'Confirmed', 'On the way', 'Cleaning', 'Done'];
+
+/// The stepper's status for a server booking (contract statuses).
+BookingStatus progressStatusOf(BookingState s) => switch (s) {
+      BookingState.requested => BookingStatus.requested,
+      BookingState.confirmed => BookingStatus.confirmed,
+      BookingState.onTheWay => BookingStatus.onTheWay,
+      BookingState.inService => BookingStatus.inService,
+      BookingState.rescheduleNeeded => BookingStatus.rescheduleNeeded,
+      BookingState.completed => BookingStatus.completed,
+      BookingState.missed || BookingState.cancelled => BookingStatus.cancelled,
+      BookingState.unableToServe => BookingStatus.unableToServe,
+    };
 
 /// Position of a booking on the happy path, or null when it has left it
 /// (reschedule needed, cancelled, unable to serve).

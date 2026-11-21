@@ -3,18 +3,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
+import '../core/pricing.dart';
+import '../core/scheduling.dart' show clockLabel;
 import '../core/theme.dart';
+import '../data/api/models.dart';
 import '../data/business_info.dart';
-import '../models/booking.dart';
-import '../models/service.dart';
-import '../providers/app_providers.dart';
+import '../providers/booking_providers.dart';
 import '../widgets/booking_progress.dart';
 import '../widgets/ui.dart';
 
 /// Shown right after a booking request is sent (v3 design). It is a
 /// *request*: the team still confirms the slot, so this screen says exactly
-/// that, with how long it usually takes, instead of claiming the slot is
-/// locked.
+/// that, with when to expect it (from the server, which knows working hours)
+/// and that the confirmation comes on WhatsApp.
 class BookingSentScreen extends ConsumerStatefulWidget {
   final String bookingRef;
   const BookingSentScreen({super.key, required this.bookingRef});
@@ -43,14 +44,10 @@ class _BookingSentScreenState extends ConsumerState<BookingSentScreen>
 
   @override
   Widget build(BuildContext context) {
-    final b = ref
-            .watch(myBookingsProvider)
-            .where((x) => x.ref == widget.bookingRef)
-            .firstOrNull ??
-        ref.watch(bookingsProvider.notifier).byRef(widget.bookingRef);
+    final b = ref.watch(apiBookingProvider(widget.bookingRef)).valueOrNull;
     final confirmed = b != null &&
-        (progressIndex(b.status) ?? 0) >= 1 &&
-        b.status != BookingStatus.rescheduleNeeded;
+        const [BookingState.confirmed, BookingState.onTheWay, BookingState.inService]
+            .contains(b.status);
 
     final scale = CurvedAnimation(
         parent: _anim,
@@ -109,8 +106,9 @@ class _BookingSentScreenState extends ConsumerState<BookingSentScreen>
                         Text(
                             confirmed
                                 ? 'See you then.'
-                                : 'We\'ll confirm it in the app,\n'
-                                    'usually within $kConfirmUsually.',
+                                : b?.statusNote ??
+                                    'We\'ll confirm it on WhatsApp,\n'
+                                        'usually within $kConfirmUsually.',
                             textAlign: TextAlign.center,
                             style: AppText.body),
                         if (b != null) ...[
@@ -130,7 +128,8 @@ class _BookingSentScreenState extends ConsumerState<BookingSentScreen>
                                     style:
                                         TextStyle(fontWeight: FontWeight.w800)),
                                 TextSpan(
-                                    text: 'the status changes to Confirmed '
+                                    text: 'you get a WhatsApp message when the '
+                                        'team confirms, and the status changes '
                                         'here and under My Bookings. Keep a '
                                         'water tap and plug point ready for '
                                         'the visit.'),
@@ -167,19 +166,19 @@ class _BookingSentScreenState extends ConsumerState<BookingSentScreen>
 /// What was requested: status, when, what, and the booking reference
 /// (tap to copy).
 class _StatusCard extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   final bool confirmed;
   const _StatusCard({required this.booking, required this.confirmed});
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final service = serviceById(b.serviceId);
     final extras = b.extras.length;
     final what = [
-      service?.listName ?? b.serviceName,
+      b.service.name,
       if (extras > 0) '$extras ${extras == 1 ? 'extra' : 'extras'}',
     ].join(' + ');
+    final car = b.car.model.trim().isEmpty ? carTypeNames[b.car.type]! : b.car.model;
     return AppCard(
       radius: AppRadius.lg,
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -219,20 +218,21 @@ class _StatusCard extends StatelessWidget {
         ]),
         const SizedBox(height: AppSpace.sm),
         Text(
-            '${friendlyDate(b.date)}, '
-            '${slotById(b.slotId)?.short ?? b.slotLabel}',
+            '${friendlyDate(b.slot.date)}, expert arrives '
+            '${clockLabel(b.slot.start)}',
             style: AppText.h3),
         const SizedBox(height: 2),
-        Text('$what · ${b.carLabel}', style: AppText.small),
+        Text('$what · $car', style: AppText.small),
         const SizedBox(height: AppSpace.lg),
-        BookingProgress(status: b.status),
+        BookingProgress(status: progressStatusOf(b.status)),
         const Divider(height: AppSpace.xl),
         Row(children: [
           Expanded(
-            child: Text(kPayAfterService ? 'Pay after the service' : 'To pay',
+            child: Text(
+                kPayAfterService ? 'Pay after the service' : 'To pay',
                 style: AppText.small),
           ),
-          Text(rupees(b.payable), style: AppText.bodyStrong),
+          Text(rupees(b.bill.total), style: AppText.bodyStrong),
         ]),
       ]),
     );

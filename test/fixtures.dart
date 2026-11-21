@@ -1,6 +1,15 @@
 // Shared test data: a signed-in customer with a car, an address and one
 // booking in different states. Used by layout tests and the screenshot tool.
 import 'dart:convert';
+import 'dart:math';
+
+import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
+import 'package:cleancruisers_app/data/api/models.dart';
+import 'package:cleancruisers_app/data/auth_service.dart';
+import 'package:cleancruisers_app/providers/api_providers.dart';
+import 'package:cleancruisers_app/providers/app_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cleancruisers_app/core/format.dart';
 import 'package:cleancruisers_app/models/booking.dart';
 import 'package:cleancruisers_app/models/service.dart';
@@ -72,3 +81,51 @@ Map<String, Object> holdPrefs() => {
       ]),
     };
 
+
+// ── Test-build server (slice 3+) ─────────────────────────────────────────────
+
+/// A fake server with the fixture customer (9876543210) signed in.
+FakeApi fixtureApi() => FakeApi(random: Random(1))..signIn('9876543210');
+
+/// Overrides that make a screen talk to [api] like a test build does.
+List<Override> fakeOverrides(FakeApi api) => [
+      fakeApiProvider.overrideWithValue(api),
+      apiProvider.overrideWithValue(api),
+      authServiceProvider.overrideWith(
+          (ref) => FakeAuthService(api, ref.watch(sharedPrefsProvider))),
+    ];
+
+/// Sends the fixture request (wash-full, 2 seats, tomorrow 9:00 AM) and
+/// returns its reference.
+Future<String> fixtureRequest(FakeApi api) async {
+  final a = await api.addAddress(const ApiAddress(
+      flat: 'B-12', building: 'Pocket 3', area: 'Janakpuri', pincode: '110058'));
+  final b = await api.createBooking(BookingRequest(
+    serviceId: 'wash-full',
+    car: const ApiCar(CarType.hatchback, 'White Swift'),
+    extras: const {'seat': 2},
+    slot: SlotPick(addDays(dateOnly(DateTime.now()), 1), 9 * 60),
+    addressId: a.id,
+  ));
+  return b.ref;
+}
+
+/// Shows [then] once the fixture request exists on [api] (sent once).
+class AfterRequest extends StatefulWidget {
+  final FakeApi api;
+  final Widget Function(String ref) then;
+  const AfterRequest({super.key, required this.api, required this.then});
+
+  @override
+  State<AfterRequest> createState() => _AfterRequestState();
+}
+
+class _AfterRequestState extends State<AfterRequest> {
+  late final Future<String> _ref = fixtureRequest(widget.api);
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+        future: _ref,
+        builder: (_, s) => s.hasData ? widget.then(s.data!) : const SizedBox(),
+      );
+}

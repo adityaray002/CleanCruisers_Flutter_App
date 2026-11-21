@@ -1,47 +1,22 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
-import '../../core/scheduling.dart';
+import '../../core/pricing.dart';
+import '../../core/scheduling.dart' show clockLabel;
 import '../../core/theme.dart';
+import '../../data/api/models.dart';
 import '../../data/business_info.dart';
-import '../../data/offers.dart';
-import '../../models/booking.dart';
 import '../../models/service.dart';
-import '../../models/worker.dart' show dateKey;
+import '../../providers/api_providers.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/booking_providers.dart';
 import '../../widgets/offer_card.dart';
 import '../../widgets/service_widgets.dart';
 import '../../widgets/ui.dart';
 
-/// Pieces of the three-step booking (see booking_flow_screen.dart).
-
-class StepHeading extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final bool optional;
-  const StepHeading(this.icon, this.text, {super.key, this.optional = false});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpace.md),
-        child: Semantics(
-          header: true,
-          child: Row(children: [
-            Icon(icon, size: 20, color: AppColors.primary),
-            const SizedBox(width: AppSpace.sm),
-            Flexible(child: Text(text, style: AppText.h3)),
-            if (optional) ...[
-              const SizedBox(width: AppSpace.sm),
-              Text('Optional', style: AppText.caption),
-            ],
-          ]),
-        ),
-      );
-}
-
-/// Gives a text field the same accessible name as its visible label.
+/// Pieces of the three-step booking (see booking_flow_screen.dart). Prices,
+/// start times and the bill come from the server.
 
 Widget _error(String text) => Padding(
       padding: const EdgeInsets.only(top: 6, bottom: 4),
@@ -52,12 +27,16 @@ Widget _error(String text) => Padding(
 // ── Service being booked ──────────────────────────────────────────────────────
 /// Photo, name, how long it takes, and the price for the customer's car.
 class BookingItemCard extends StatelessWidget {
-  final BookingDraft draft;
-  const BookingItemCard({super.key, required this.draft});
+  final CarService display;
+  final CatalogService service;
+  final CarType? car;
+  const BookingItemCard(
+      {super.key, required this.display, required this.service, this.car});
 
   @override
   Widget build(BuildContext context) {
-    final s = draft.service;
+    final s = display;
+    final from = service.prices.values.reduce((a, b) => a < b ? a : b);
     return AppCard(
       padding: const EdgeInsets.all(AppSpace.md),
       child: Row(children: [
@@ -93,10 +72,7 @@ class BookingItemCard extends StatelessWidget {
           ]),
         ),
         const SizedBox(width: AppSpace.sm),
-        Text(
-            draft.car == null
-                ? rupees(s.fromPrice)
-                : rupees(draft.servicePrice),
+        Text(rupees(car == null ? from : service.priceFor(car!)),
             style: AppText.bodyStrong),
       ]),
     );
@@ -105,13 +81,18 @@ class BookingItemCard extends StatelessWidget {
 
 // ── Add-ons: one list, a stepper for per-seat extras, a tick for the rest ──
 class AddOnStrip extends StatelessWidget {
-  final BookingDraft draft;
-  final DraftNotifier notifier;
-  const AddOnStrip({super.key, required this.draft, required this.notifier});
+  final CatalogService service;
+  final RequestDraft draft;
+  final RequestDraftNotifier notifier;
+  const AddOnStrip(
+      {super.key,
+      required this.service,
+      required this.draft,
+      required this.notifier});
 
   @override
   Widget build(BuildContext context) {
-    final extras = draft.service.extras;
+    final extras = service.extras;
     return AppCard(
       radius: AppRadius.lg,
       padding: EdgeInsets.zero,
@@ -130,7 +111,7 @@ class AddOnStrip extends StatelessWidget {
 }
 
 class _ExtraRow extends StatelessWidget {
-  final Extra extra;
+  final CatalogExtra extra;
   final int qty;
   final ValueChanged<int> onChanged;
   const _ExtraRow(
@@ -262,122 +243,129 @@ class _Step extends StatelessWidget {
   }
 }
 
-// ── Slot picker ───────────────────────────────────────────────────────────────
+// ── Time picker ───────────────────────────────────────────────────────────────
+/// Days in a row, then the start times the server says are open that day.
+/// A start time shows when the expert arrives and when the car is ready.
 class SlotPicker extends ConsumerWidget {
-  final BookingDraft draft;
-  final DraftNotifier notifier;
+  /// The service whose time is booked (for a plan: the plan's wash).
+  final String serviceId;
+  final RequestDraft draft;
+  final RequestDraftNotifier notifier;
+  final int windowDays;
   final bool showErrors;
 
   const SlotPicker({
     super.key,
+    required this.serviceId,
     required this.draft,
     required this.notifier,
+    required this.windowDays,
     required this.showErrors,
   });
-
-  /// Days the customer can book this service on (today is skipped once no
-  /// slot can still fit it).
-  static List<DateTime> bookableDays(BookingDraft draft) {
-    final today = dateOnly(DateTime.now());
-    final minutes = draft.serviceDurationMinutes;
-    return [for (var i = 0; i < kBookingWindowDays; i++) addDays(today, i)]
-        .where((d) => timeSlots.any((s) =>
-            s.isAvailable(d) && canFinishByClose(s.startMinute, minutes)))
-        .toList();
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final today = dateOnly(DateTime.now());
-    final minutes = draft.serviceDurationMinutes;
-    final bookable = bookableDays(draft);
-    final capacity = draft.date == null
-        ? CapacityDay.open
-        : ref.watch(capacityProvider(dateKey(draft.date!))).valueOrNull ??
-            CapacityDay.open;
-    final states = {
-      if (draft.date != null)
-        for (final slot in timeSlots)
-          slot.id: customerWindowState(
-            windowStart: slot.startMinute,
-            windowId: slot.id,
-            date: draft.date!,
-            serviceMinutes: minutes,
-            capacity: capacity,
+    final days = [for (var i = 0; i < windowDays; i++) addDays(today, i)];
+    final date = draft.date;
+    final car = draft.car;
+
+    Widget times() {
+      if (date == null || car == null) return const SizedBox.shrink();
+      final key = (serviceId, car, draft.extrasKey, dateKey(date));
+      final async = ref.watch(availabilityProvider(key));
+      return async.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpace.xl),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => Column(children: [
+          NoticeBox(
+            icon: Icons.wifi_off_rounded,
+            warning: true,
+            text: e is ApiException
+                ? e.message
+                : 'Couldn\'t load the times. Check your connection.',
           ),
-    };
-    final noneFit = states.isNotEmpty &&
-        states.values.every((s) => s != WindowState.preference);
+          TextButton(
+            onPressed: () => ref.invalidate(availabilityProvider(key)),
+            child: const Text('Try again'),
+          ),
+        ]),
+        data: (a) {
+          if (a.closedReason != null) {
+            return NoticeBox(
+                icon: Icons.event_busy_outlined,
+                warning: true,
+                text: '${a.closedReason}. Please pick another day.');
+          }
+          final open = a.openSlots;
+          if (open.isEmpty) {
+            return NoticeBox(
+              icon: Icons.event_busy_outlined,
+              warning: true,
+              text: dateOnly(date) == today
+                  ? 'No times left today. Please pick another day.'
+                  : 'This day is full. Please pick another day.',
+            );
+          }
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (label, icon, morning) in const [
+                  ('Morning', Icons.wb_twilight_rounded, true),
+                  ('Afternoon', Icons.wb_sunny_rounded, false),
+                ])
+                  if (open.any((s) => (s.start < 12 * 60) == morning)) ...[
+                    Row(children: [
+                      Icon(icon, size: 16, color: AppColors.textSubtle),
+                      const SizedBox(width: 6),
+                      Text(label, style: AppText.smallStrong),
+                    ]),
+                    const SizedBox(height: AppSpace.sm),
+                    LayoutBuilder(builder: (context, c) {
+                      const gap = AppSpace.sm;
+                      final w = (c.maxWidth - gap * 2) / 3;
+                      return Wrap(spacing: gap, runSpacing: gap, children: [
+                        for (final s in open
+                            .where((s) => (s.start < 12 * 60) == morning))
+                          SizedBox(
+                            width: w,
+                            child: _TimeChip(
+                              slot: s,
+                              selected: draft.start == s.start,
+                              onTap: () => notifier.setTime(date, s.start),
+                            ),
+                          ),
+                      ]);
+                    }),
+                    const SizedBox(height: AppSpace.md),
+                  ],
+              ]);
+        },
+      );
+    }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SizedBox(
         height: 78,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          itemCount: bookable.length,
+          itemCount: days.length,
           separatorBuilder: (_, __) => const SizedBox(width: AppSpace.sm),
           itemBuilder: (_, i) => _DayChip(
-            day: bookable[i],
+            day: days[i],
             today: today,
-            selected:
-                draft.date != null && dateOnly(draft.date!) == bookable[i],
-            onTap: () => notifier.setDate(bookable[i]),
+            selected: date != null && dateOnly(date) == days[i],
+            onTap: () => notifier.setDate(days[i]),
           ),
         ),
       ),
-      if (showErrors && draft.date == null) _error('Please pick a day.'),
-      if (draft.date != null) ...[
+      if (showErrors && date == null) _error('Please pick a day.'),
+      if (date != null) ...[
         const SizedBox(height: AppSpace.lg),
-        if (capacity.closed)
-          const NoticeBox(
-            icon: Icons.event_busy_outlined,
-            warning: true,
-            text: 'No bookings on this day. Please pick another day.',
-          )
-        else ...[
-          if (noneFit)
-            const Padding(
-              padding: EdgeInsets.only(bottom: AppSpace.md),
-              child: NoticeBox(
-                icon: Icons.event_busy_outlined,
-                warning: true,
-                text: 'This day is full. Please pick another day.',
-              ),
-            ),
-          for (final (label, icon, morning) in const [
-            ('Morning', Icons.wb_twilight_rounded, true),
-            ('Afternoon', Icons.wb_sunny_rounded, false),
-          ]) ...[
-            Row(children: [
-              Icon(icon, size: 16, color: AppColors.textSubtle),
-              const SizedBox(width: 6),
-              Text(label, style: AppText.smallStrong),
-            ]),
-            const SizedBox(height: AppSpace.sm),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: AppSpace.sm,
-              crossAxisSpacing: AppSpace.sm,
-              childAspectRatio: 2.5,
-              children: [
-                for (final slot
-                    in timeSlots.where((s) => s.isMorning == morning))
-                  _SlotChip(
-                    slot: slot,
-                    state: states[slot.id]!,
-                    durationMinutes: minutes,
-                    selected: draft.slotId == slot.id,
-                    onTap: () => notifier.setSlot(slot.id),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.md),
-          ],
-        ],
-        if (showErrors && !draft.scheduleDone)
-          _error('Please pick an available slot.'),
+        times(),
+        if (showErrors && !draft.timePicked) _error('Please pick a time.'),
       ],
     ]);
   }
@@ -443,19 +431,77 @@ class _DayChip extends StatelessWidget {
   }
 }
 
-/// Price breakdown with coupon, kept short: one line per item.
+/// "9:30 AM" (when the expert arrives) and "ready ~11:30" underneath.
+class _TimeChip extends StatelessWidget {
+  final Slot slot;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TimeChip(
+      {required this.slot, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Expert arrives ${clockLabel(slot.start)}, '
+          'car ready by about ${clockLabel(slot.end)}',
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border),
+          ),
+          child: ExcludeSemantics(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(clockLabel(slot.start),
+                  textAlign: TextAlign.center,
+                  style: AppText.bodyStrong.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: selected ? Colors.white : AppColors.text)),
+              // "ready ~1:30": short enough for one line on small phones;
+              // the full time is in the accessible label.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('ready ~${clockLabel(slot.end).split(' ').first}',
+                    maxLines: 1,
+                    style: AppText.caption.copyWith(
+                        color: selected ? Colors.white : AppColors.primary)),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Bill ──────────────────────────────────────────────────────────────────────
+/// The server's bill: one line per item and discount, GST, and the total.
 class BillCard extends ConsumerWidget {
-  final BookingDraft draft;
-  final DraftNotifier notifier;
-  const BillCard({super.key, required this.draft, required this.notifier});
+  final AsyncValue<Quote> quote;
+  final RequestDraft draft;
+  final RequestDraftNotifier notifier;
+  final VoidCallback onRetry;
+  const BillCard({
+    super.key,
+    required this.quote,
+    required this.draft,
+    required this.notifier,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final d = draft;
-    final s = d.service;
-    final wallet = ref.watch(walletProvider);
-    final credit = d.cleanCreditDeduction(wallet.balance);
-    final payable = d.payableTotal(wallet.balance);
+    final balance = ref.watch(meProvider).valueOrNull?.walletBalance ?? 0;
 
     Widget row(String label, String value, {bool green = false}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -470,159 +516,116 @@ class BillCard extends ConsumerWidget {
           ]),
         );
 
-    return AppCard(
-      child: Column(children: [
-        row(
-            s.listName,
-            '${rupees(d.servicePrice)}'
-            '${s.priceSuffix.isEmpty ? '' : ' ${s.priceSuffix}'}'),
-        for (final (e, q) in d.selectedExtras)
-          row(q > 1 ? '${e.name} × $q' : e.name, rupees(e.price * q)),
-        if (d.couponDiscount > 0)
-          row('Coupon ${d.couponCode ?? ''}', '-${rupees(d.couponDiscount)}',
-              green: true),
-        if (credit > 0)
-          row('CleanCredit Wallet Applied', '-${rupees(credit)}', green: true),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            style: TextButton.styleFrom(padding: EdgeInsets.zero),
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              showDragHandle: true,
-              builder: (ctx) => _CouponSheet(draft: d, notifier: notifier),
+    String discountLabel(BillDiscount d) => switch (d.kind) {
+          'coupon' => 'Coupon ${d.code ?? ''}',
+          'credit' => 'CleanCredit',
+          'plan' => d.name ?? 'Plan visit',
+          _ => d.name ?? 'Offer',
+        };
+
+    final body = quote.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpace.lg),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Column(children: [
+        Text(
+            e is ApiException
+                ? e.message
+                : 'Couldn\'t get the price. Check your connection.',
+            style: AppText.small.copyWith(color: AppColors.error)),
+        TextButton(onPressed: onRetry, child: const Text('Try again')),
+      ]),
+      data: (q) {
+        final b = q.bill;
+        return Column(children: [
+          for (final i in b.items)
+            row(i.qty > 1 ? '${i.name} × ${i.qty}' : i.name, rupees(i.amount)),
+          for (final d in b.discounts)
+            row(discountLabel(d), '-${rupees(d.amount)}', green: true),
+          if (b.lateCancelFee > 0)
+            row('Late cancellation fee (earlier booking)',
+                rupees(b.lateCancelFee)),
+          if (b.discountCapNote != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(b.discountCapNote!, style: AppText.caption),
+              ),
             ),
-            icon: const Icon(Icons.local_offer_outlined, size: 18),
-            label: Text(d.couponCode == null ? 'Add coupon' : 'Change coupon'),
+          const Divider(height: AppSpace.lg),
+          Row(children: [
+            Expanded(
+                child: Text(
+                    kPayAfterService ? 'To pay after the service' : 'To pay',
+                    style: AppText.bodyStrong)),
+            Text(rupees(b.total), style: AppText.price),
+          ]),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+                'Includes GST ${rupees(b.gst.cgst + b.gst.sgst)} '
+                '(${b.gst.rate}%)',
+                style: AppText.caption),
           ),
+        ]);
+      },
+    );
+
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        body,
+        const SizedBox(height: AppSpace.sm),
+        Wrap(
+          spacing: AppSpace.md,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero, minimumSize: const Size(0, 44)),
+              onPressed: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (ctx) => CouponSheet(draft: draft, notifier: notifier),
+              ),
+              icon: const Icon(Icons.local_offer_outlined, size: 18),
+              label: Text(
+                  draft.couponCode == null ? 'Add coupon' : 'Change coupon'),
+            ),
+            if (balance > 0)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('Use CleanCredit (${rupees(balance)})',
+                    style: AppText.small.copyWith(color: AppColors.text)),
+                Switch(
+                  value: draft.useCredit,
+                  onChanged: notifier.setUseCredit,
+                ),
+              ]),
+          ],
         ),
-        const Divider(height: AppSpace.lg),
-        Row(children: [
-          Expanded(
-              child: Text(
-                  kPayAfterService ? 'To pay after the service' : 'To pay',
-                  style: AppText.bodyStrong)),
-          Text(rupees(payable), style: AppText.price),
-        ]),
       ]),
     );
   }
 }
 
-class _SlotChip extends StatelessWidget {
-  final TimeSlot slot;
-  final WindowState state;
-  final int durationMinutes;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SlotChip(
-      {required this.slot,
-      required this.state,
-      this.durationMinutes = 0,
-      required this.selected,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final open = state == WindowState.preference;
-    final on = selected && open;
-    final reason = switch (state) {
-      WindowState.full => 'Full',
-      WindowState.tooLate => 'Too late for this service',
-      WindowState.closedByTeam => 'Not available',
-      WindowState.passed => 'Time passed',
-      WindowState.preference => null,
-    };
-    return Semantics(
-      button: open,
-      selected: on,
-      label: '${slot.short}${reason == null ? '' : ', $reason'}',
-      child: GestureDetector(
-        onTap: open
-            ? () {
-                HapticFeedback.selectionClick();
-                onTap();
-              }
-            : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(
-            color: on
-                ? AppColors.primary
-                : open
-                    ? AppColors.surface
-                    : AppColors.surfaceAlt,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(
-                color: on
-                    ? AppColors.primary
-                    : open
-                        ? AppColors.border
-                        : Colors.transparent),
-          ),
-          child: ExcludeSemantics(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              FittedBox(
-                child: Text(slot.short,
-                    style: AppText.bodyStrong.copyWith(
-                        fontWeight: FontWeight.w800,
-                        decoration: open ? null : TextDecoration.lineThrough,
-                        color: on
-                            ? Colors.white
-                            : open
-                                ? AppColors.text
-                                : AppColors.textSubtle)),
-              ),
-              if (reason != null)
-                FittedBox(
-                  child: Text(reason, style: AppText.caption.copyWith()),
-                )
-              else if (durationMinutes > 0)
-                FittedBox(
-                  child: Text(
-                    readyByLabel(slot.startMinute, durationMinutes),
-                    style: AppText.caption.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: on ? Colors.white : AppColors.primary,
-                    ),
-                  ),
-                ),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ── Coupons ───────────────────────────────────────────────────────────────────
-// Offers come from lib/data/offers.dart, the same list the CleanCredit tab
-// shows, so there is one place to add or stop a coupon.
-
-/// Rupees [o] takes off this booking, after the 40% coupon cap.
-int couponDiscountFor(Offer o, BookingDraft d) =>
-    min(o.discountFor(d.total), d.maxCouponDiscount);
-
-/// Why [o] can't be used on this booking right now, or null.
-String? couponBlocker(Offer o, BookingDraft d, {required bool firstBooking}) =>
-    o.whyNot(total: d.total, car: d.car, firstBooking: firstBooking);
-
-class _CouponSheet extends ConsumerStatefulWidget {
-  final BookingDraft draft;
-  final DraftNotifier notifier;
-  const _CouponSheet({required this.draft, required this.notifier});
+/// Offers from the server. "Apply" asks the server whether this booking
+/// qualifies; if not, the reason shows under the field.
+class CouponSheet extends ConsumerStatefulWidget {
+  final RequestDraft draft;
+  final RequestDraftNotifier notifier;
+  const CouponSheet({super.key, required this.draft, required this.notifier});
 
   @override
-  ConsumerState<_CouponSheet> createState() => _CouponSheetState();
+  ConsumerState<CouponSheet> createState() => _CouponSheetState();
 }
 
-class _CouponSheetState extends ConsumerState<_CouponSheet> {
+class _CouponSheetState extends ConsumerState<CouponSheet> {
   final _code = TextEditingController();
   String? _error;
+  String? _checking;
 
   @override
   void dispose() {
@@ -630,34 +633,43 @@ class _CouponSheetState extends ConsumerState<_CouponSheet> {
     super.dispose();
   }
 
-  bool get _first => ref.read(myBookingsProvider).isEmpty;
-
-  void _apply(Offer o) {
-    final why = couponBlocker(o, widget.draft, firstBooking: _first);
-    if (why != null) {
-      setState(() => _error = why);
+  Future<void> _apply(String raw) async {
+    final code = raw.trim().toUpperCase();
+    if (code.isEmpty || _checking != null) return;
+    final address = apiAddressOf(ref.read(profileProvider));
+    final request = widget.draft.copyWith(couponCode: code).request(address);
+    if (request == null) {
+      setState(() => _error = 'Pick a time first');
       return;
     }
-    HapticFeedback.selectionClick();
-    widget.notifier.applyCoupon(o.code, couponDiscountFor(o, widget.draft));
-    Navigator.pop(context);
-    showMessage(context,
-        '${o.code} applied: ${rupees(couponDiscountFor(o, widget.draft))} off');
-  }
-
-  void _applyTyped() {
-    final o = offerByCode(_code.text);
-    if (o == null) {
-      setState(() => _error = 'This code doesn\'t exist');
-      return;
+    setState(() {
+      _checking = code;
+      _error = null;
+    });
+    try {
+      final q = await ref.read(apiProvider).quote(request);
+      if (!mounted) return;
+      if (!q.couponApplied) {
+        setState(() => _error = q.couponReason ?? 'This code can’t be used');
+        return;
+      }
+      HapticFeedback.selectionClick();
+      widget.notifier.setCoupon(code);
+      Navigator.pop(context);
+      showMessage(context, '$code applied: ${rupees(q.bill.discountOf('coupon'))} off');
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on Object {
+      if (mounted) setState(() => _error = 'Couldn\'t check the code. Try again.');
+    } finally {
+      if (mounted) setState(() => _checking = null);
     }
-    _apply(o);
   }
 
   @override
   Widget build(BuildContext context) {
     final d = widget.draft;
-    final first = ref.watch(myBookingsProvider).isEmpty;
+    final offers = ref.watch(publicOffersProvider).valueOrNull ?? const [];
     return Padding(
       padding: EdgeInsets.fromLTRB(AppSpace.page, 0, AppSpace.page,
           AppSpace.lg + MediaQuery.viewInsetsOf(context).bottom),
@@ -677,10 +689,11 @@ class _CouponSheetState extends ConsumerState<_CouponSheet> {
                       controller: _code,
                       textCapitalization: TextCapitalization.characters,
                       onChanged: (_) => setState(() => _error = null),
-                      onSubmitted: (_) => _applyTyped(),
+                      onSubmitted: _apply,
                       decoration: InputDecoration(
                         hintText: 'Have a code? Type it',
                         errorText: _error,
+                        errorMaxLines: 2,
                         prefixIcon: const Icon(Icons.local_offer_outlined),
                       ),
                     ),
@@ -690,26 +703,31 @@ class _CouponSheetState extends ConsumerState<_CouponSheet> {
                 SizedBox(
                   height: 54,
                   child: OutlinedButton(
-                    onPressed: _code.text.trim().isEmpty ? null : _applyTyped,
+                    onPressed: _code.text.trim().isEmpty || _checking != null
+                        ? null
+                        : () => _apply(_code.text),
                     child: const Text('Apply'),
                   ),
                 ),
               ]),
               const SizedBox(height: AppSpace.lg),
-              for (final o in kOffers) ...[
-                OfferCard(
+              for (final o in offers) ...[
+                OfferCard.public(
                   offer: o,
-                  blockedReason: couponBlocker(o, d, firstBooking: first),
                   applied: d.couponCode == o.code,
-                  actionLabel: d.couponCode == o.code ? 'Applied' : 'Apply',
-                  onAction: () => _apply(o),
+                  actionLabel: d.couponCode == o.code
+                      ? 'Applied'
+                      : _checking == o.code
+                          ? 'Checking…'
+                          : 'Apply',
+                  onAction: () => _apply(o.code),
                 ),
                 const SizedBox(height: 10),
               ],
               if (d.couponCode != null)
                 TextButton.icon(
                   onPressed: () {
-                    widget.notifier.removeCoupon();
+                    widget.notifier.setCoupon(null);
                     Navigator.pop(context);
                   },
                   icon: const Icon(Icons.close_rounded, size: 18),

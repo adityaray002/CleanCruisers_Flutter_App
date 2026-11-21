@@ -28,9 +28,16 @@ import 'shots.dart';
 /// Saved car + address: the flow opens on the time step. Pick a slot.
 Future<void> toSlot(WidgetTester t) async {
   await t.tap(find.text('Tmrw'));
-  await t.pump();
-  await t.tap(find.text('11:30 AM – 12:30 PM'));
-  await t.pump();
+  await t.pump(const Duration(milliseconds: 300));
+  await t.pump(const Duration(milliseconds: 300));
+  await t.tap(find.text('11:30 AM'));
+  await t.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> next(WidgetTester t) async {
+  await t.tap(find.text('Continue').last);
+  await t.pump(const Duration(milliseconds: 300));
+  await t.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -79,28 +86,36 @@ void main() {
       const ServiceDetailScreen(serviceId: 'rubbing-wax-exterior'), 2000,
       prefs: profile);
   // Booking, three steps: car + address come from the profile.
+  // On the test-build server: times and the bill come from it.
   both('book', const BookingFlowScreen(serviceId: 'wash-full'), 1200,
-      prefs: profile, interact: (t) async {
-    await t.tap(find.text('Seat cleaning'));
+      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+    await t.tap(find.text('Roof cleaning'));
     await t.pump(const Duration(milliseconds: 300));
   });
-  both('book_slot', const BookingFlowScreen(serviceId: 'wash-full'), 1400,
-      prefs: profile, interact: (t) async {
-    await t.tap(find.text('Continue'));
-    await t.pump(const Duration(milliseconds: 300));
+  both('book_slot', const BookingFlowScreen(serviceId: 'wash-full'), 1600,
+      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+    await next(t);
     await toSlot(t);
   });
   both('book_review', const BookingFlowScreen(serviceId: 'wash-full'), 1500,
-      prefs: profile, interact: (t) async {
-    await t.tap(find.text('Continue'));
-    await t.pump(const Duration(milliseconds: 300));
+      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+    await t.tap(find.text('Roof cleaning'));
+    await next(t);
     await toSlot(t);
-    await t.tap(find.text('Continue'));
-    await t.pump(const Duration(milliseconds: 300));
+    await next(t);
+  });
+  both('book_plan', const BookingFlowScreen(serviceId: 'monthly-3'), 1500,
+      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+    await toSlot(t);
+    await next(t);
   });
   both('onboard_address', const AddressScreen(), 1000);
-  both('sent', const BookingSentScreen(bookingRef: 'CC-7K4Q2X9M'), 1000,
-      prefs: bookingPrefs(confirmed: false));
+  final sentApi = fixtureApi();
+  both('sent',
+      AfterRequest(api: sentApi, then: (ref) => BookingSentScreen(bookingRef: ref)),
+      1000,
+      prefs: profile,
+      overrides: fakeOverrides(sentApi));
   both('bookings', const BookingsScreen(), 800, prefs: bookingPrefs());
   both('bookings_past', const BookingsScreen(), 800, prefs: repeatPrefs(),
       interact: (t) async {

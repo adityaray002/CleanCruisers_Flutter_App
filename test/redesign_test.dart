@@ -105,7 +105,7 @@ void main() {
   testWidgets('booking goes Extras → Pick a time → Review, and back',
       (tester) async {
     await pumpAt(tester, const BookingFlowScreen(serviceId: 'wash-full'),
-        textScale: 1.0, saved: profile);
+        textScale: 1.0, saved: profile, overrides: fakeOverrides(fixtureApi()));
 
     expect(find.text('Step 1 of 3'), findsOneWidget);
     expect(find.text('Add extras'), findsWidgets);
@@ -115,8 +115,9 @@ void main() {
     expect(find.text('Step 2 of 3'), findsOneWidget);
 
     await tester.tap(find.text('Tmrw'));
-    await tester.pump();
-    await tester.tap(find.text('11:30 AM – 12:30 PM'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300)); // times load
+    await tester.tap(find.text('11:30 AM'));
     await tester.pump();
     await tester.tap(find.text('Continue').last);
     await tester.pump(const Duration(milliseconds: 400));
@@ -128,11 +129,10 @@ void main() {
     expect(find.text('Step 2 of 3'), findsOneWidget);
   });
 
-  testWidgets('a package without extras starts on Pick a time',
+  testWidgets('a monthly plan starts on Pick a time (no extras)',
       (tester) async {
-    final noExtras = serviceCatalog.firstWhere((s) => s.extras.isEmpty);
-    await pumpAt(tester, BookingFlowScreen(serviceId: noExtras.id),
-        textScale: 1.0, saved: profile);
+    await pumpAt(tester, const BookingFlowScreen(serviceId: 'monthly-3'),
+        textScale: 1.0, saved: profile, overrides: fakeOverrides(fixtureApi()));
     expect(find.text('Step 1 of 2'), findsOneWidget);
     expect(find.text('Pick a time'), findsWidgets);
   });
