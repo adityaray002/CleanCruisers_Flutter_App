@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../data/booking_cloud.dart';
+import '../providers/api_providers.dart';
 import '../models/service.dart';
 import '../providers/app_providers.dart';
 import '../screens/addresses_screen.dart';
@@ -46,8 +47,8 @@ class _AuthRefresh extends ChangeNotifier {
 
 /// Customers log in with a phone OTP, then give their name, car and address
 /// once (so bookings never ask for them). The staff desk
-/// (/ops) has its own email login. Builds without Firebase configured can't
-/// send OTPs, so they skip the gate (booking then fails closed).
+/// (/ops) has its own email login. Builds where OTP login isn't available
+/// (no Firebase, not a test build) skip the gate (booking then fails closed).
 String? authRedirect(
   String path, {
   required bool configured,
@@ -68,8 +69,8 @@ String? authRedirect(
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final cloud = ref.watch(bookingCloudProvider);
-  final refresh = _AuthRefresh(cloud.userChanges());
+  final auth = ref.watch(authServiceProvider);
+  final refresh = _AuthRefresh(auth.changes);
   ref.onDispose(refresh.dispose);
   ref.listen(profileProvider.select((p) => p.ready), (_, __) => refresh.ping());
   ref.listen(setupSkippedProvider, (_, __) => refresh.ping());
@@ -78,9 +79,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     redirect: (context, state) => authRedirect(
       state.uri.path,
-      configured: cloud.configured,
-      signedIn: cloud.customerSignedIn,
-      hasName: cloud.customerName != null,
+      configured: auth.available,
+      signedIn: auth.signedIn,
+      hasName: auth.name != null,
       hasSetup:
           ref.read(profileProvider).ready || ref.read(setupSkippedProvider),
     ),

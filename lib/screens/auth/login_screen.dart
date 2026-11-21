@@ -6,10 +6,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/pricing.dart';
 import '../../core/theme.dart';
+import '../../data/api/fake/fake_api.dart' show FakeApi;
+import '../../data/api/models.dart' show ApiCar;
 import '../../data/booking_cloud.dart';
 import '../../data/business_info.dart';
 import '../../models/address.dart';
 import '../../models/booking.dart';
+import '../../providers/api_providers.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/customer_sheets.dart' show AddressForm;
 import '../../widgets/ui.dart';
@@ -244,7 +247,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final session =
-          await ref.read(bookingCloudProvider).sendOtp(_phone.text.trim());
+          await ref.read(authServiceProvider).sendOtp(_phone.text.trim());
       if (!mounted) return;
       // Android may verify on its own; the router then moves on.
       if (!session.autoVerified) context.push('/login/otp', extra: session);
@@ -257,11 +260,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final configured = ref.watch(bookingCloudProvider).configured;
+    final auth = ref.watch(authServiceProvider);
+    final configured = auth.available;
     return _AuthScaffold(
       hero: true,
       title: 'Log in with your mobile',
-      subtitle: 'We\'ll send a 6-digit code by SMS.',
+      subtitle: auth.isTestBuild
+          ? 'Test build: enter any mobile number.'
+          : 'We\'ll send a 6-digit code by SMS.',
       action: PrimaryButton(
         label: 'Get OTP',
         loading: _sending,
@@ -307,6 +313,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             'Our team uses this number only to reach you about your '
             'bookings.',
             style: AppText.caption),
+        if (auth.isTestBuild) ...[
+          const SizedBox(height: AppSpace.md),
+          const NoticeBox(
+            icon: Icons.science_outlined,
+            text: 'Test build: any mobile number works. No SMS is sent; '
+                'the OTP is ${FakeApi.fakeOtp}.',
+          ),
+        ],
         if (!configured) ...[
           const SizedBox(height: 8),
           const NoticeBox(
@@ -376,7 +390,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       _error = null;
     });
     try {
-      await ref.read(bookingCloudProvider).verifyOtp(_session, _code.text);
+      await ref.read(authServiceProvider).verifyOtp(_session, _code.text);
       // The router redirects once the user is signed in.
     } on BookingCloudException catch (e) {
       setState(() {
@@ -393,7 +407,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     setState(() => _error = null);
     try {
       _session = await ref
-          .read(bookingCloudProvider)
+          .read(authServiceProvider)
           .sendOtp(_session.phone, resend: _session);
       _startTimer();
       if (mounted) showMessage(context, 'A new OTP is on its way.');
@@ -409,7 +423,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     return _AuthScaffold(
       showBack: true,
       title: 'Enter the OTP',
-      subtitle: 'Sent by SMS to $shown',
+      subtitle: ref.watch(authServiceProvider).isTestBuild
+          ? 'Test build for $shown: the OTP is ${FakeApi.fakeOtp}'
+          : 'Sent by SMS to $shown',
       action: PrimaryButton(
         label: 'Verify and continue',
         loading: _verifying,
@@ -540,18 +556,25 @@ class _NameScreenState extends ConsumerState<NameScreen> {
   Future<void> _save() async {
     if (!_valid || _saving) return;
     setState(() => _saving = true);
-    final cloud = ref.read(bookingCloudProvider);
+    final auth = ref.read(authServiceProvider);
     final profile = ref.read(profileProvider);
     try {
       await ref.read(profileProvider.notifier).save(CustomerProfile(
             name: _name.text.trim(),
-            phone: cloud.verifiedPhone ?? profile.phone,
+            phone: auth.phone ?? profile.phone,
             address: profile.address,
             pin: profile.pin,
             car: _car,
             carModel: _model.text.trim(),
           ));
-      await cloud.saveCustomerName(_name.text);
+      if (kFakeServer) {
+        // The server keeps the car too (test builds; HttpApi in step 4).
+        await ref
+            .read(apiProvider)
+            .updateMe(car: ApiCar(_car!, _model.text.trim()));
+      }
+      await auth.saveName(_name.text);
+      ref.invalidate(meProvider);
       // The router moves on once the name is saved.
     } on Object {
       if (mounted) {

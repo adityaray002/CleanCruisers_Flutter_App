@@ -13,6 +13,8 @@ import '../providers/app_providers.dart';
 import '../widgets/contact_actions.dart';
 import '../widgets/customer_sheets.dart';
 import '../widgets/ui.dart';
+import '../providers/api_providers.dart';
+import '../data/auth_service.dart';
 
 /// Profile (v3 design): who you are, your car, addresses, bookings and
 /// CleanCredit; help; about; log out (with a confirm) and team sign in.
@@ -131,7 +133,7 @@ class ProfileScreen extends ConsumerWidget {
                 _SocialChip('LinkedIn', kLinkedIn),
               ]),
               const SizedBox(height: AppSpace.xl),
-              if (ref.watch(bookingCloudProvider).customerSignedIn)
+              if (ref.watch(authServiceProvider).signedIn)
                 OutlinedButton(
                   onPressed: () => _logout(context, ref),
                   style: OutlinedButton.styleFrom(
@@ -152,15 +154,27 @@ class ProfileScreen extends ConsumerWidget {
                     textAlign: TextAlign.center,
                     style: AppText.caption),
               ),
-              Center(
-                child: TextButton(
-                  onPressed: () => context.push('/ops/login'),
-                  style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSubtle,
-                      minimumSize: const Size(0, 44)),
-                  child: const Text('Team sign in'),
+              if (ref.watch(authServiceProvider).isTestBuild)
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => _resetTestData(context, ref),
+                    icon: const Icon(Icons.science_outlined, size: 18),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSubtle,
+                        minimumSize: const Size(0, 44)),
+                    label: const Text('Test build: reset test data'),
+                  ),
+                )
+              else
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.push('/ops/login'),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSubtle,
+                        minimumSize: const Size(0, 44)),
+                    child: const Text('Team sign in'),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -192,7 +206,32 @@ class ProfileScreen extends ConsumerWidget {
     );
     if (ok != true) return;
     await ref.read(profileProvider.notifier).clear();
-    await ref.read(bookingCloudProvider).signOutCustomer();
+    await ref.read(authServiceProvider).signOut();
+  }
+
+  /// Test builds only: wipes the fake server's customers and bookings.
+  Future<void> _resetTestData(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset test data?'),
+        content: const Text(
+            'Deletes every test customer, booking and credit on this phone, '
+            'and logs you out.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Reset')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final auth = ref.read(authServiceProvider);
+    await ref.read(profileProvider.notifier).clear();
+    if (auth is FakeAuthService) await auth.resetTestData();
   }
 
   Future<void> _editProfile(
@@ -203,7 +242,7 @@ class ProfileScreen extends ConsumerWidget {
       showDragHandle: true,
       builder: (_) => _EditProfileSheet(
           initial: p,
-          phoneIsLogin: ref.read(bookingCloudProvider).verifiedPhone != null),
+          phoneIsLogin: ref.read(authServiceProvider).phone != null),
     );
     if (result != null) {
       await ref.read(profileProvider.notifier).save(result);
@@ -356,9 +395,9 @@ class _ProfileHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cloud = ref.watch(bookingCloudProvider);
-    final name = (cloud.customerName ?? profile.name).trim();
-    final phone = cloud.verifiedPhone ?? profile.phone;
+    final auth = ref.watch(authServiceProvider);
+    final name = (auth.name ?? profile.name).trim();
+    final phone = auth.phone ?? profile.phone;
     final initials = name.isEmpty
         ? '?'
         : name
@@ -393,7 +432,7 @@ class _ProfileHeader extends ConsumerWidget {
                 Text(phoneLabel(phone),
                     style:
                         AppText.small.copyWith(color: const Color(0xFFB8C0C7))),
-                if (cloud.verifiedPhone != null) ...[
+                if (auth.phone != null) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.verified_rounded,
                       size: 15, color: AppColors.brand),

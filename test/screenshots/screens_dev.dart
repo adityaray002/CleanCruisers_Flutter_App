@@ -2,8 +2,12 @@
 // Run: flutter test test/screenshots/screens_dev.dart [--dart-define=ONLY=a,b]
 // Each screen is saved twice: "<name>_fold" at phone height (what is visible
 // without scrolling) and "<name>_full" at full length.
+import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
+import 'package:cleancruisers_app/data/auth_service.dart';
 import 'package:cleancruisers_app/data/booking_cloud.dart';
 import 'package:cleancruisers_app/models/service.dart';
+import 'package:cleancruisers_app/providers/api_providers.dart';
+import 'package:cleancruisers_app/providers/app_providers.dart';
 import 'package:cleancruisers_app/screens/addresses_screen.dart';
 import 'package:cleancruisers_app/screens/auth/login_screen.dart';
 import 'package:cleancruisers_app/screens/booking/booking_flow_screen.dart';
@@ -16,6 +20,7 @@ import 'package:cleancruisers_app/screens/service_detail_screen.dart';
 import 'package:cleancruisers_app/screens/services_screen.dart';
 import 'package:cleancruisers_app/screens/wallet_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../fixtures.dart';
 import 'shots.dart';
@@ -35,22 +40,32 @@ void main() {
 
   void both(String name, Widget screen, double full,
       {Map<String, Object> prefs = const {},
+      List<Override> overrides = const [],
       Future<void> Function(WidgetTester)? interact}) {
     if (!want(name)) return;
     testWidgets(
         '${name}_fold',
         (t) => shoot(t, '${name}_fold', screen,
-            prefs: prefs, height: 800, interact: interact));
+            prefs: prefs, overrides: overrides, height: 800, interact: interact));
     testWidgets(
         '${name}_full',
         (t) => shoot(t, '${name}_full', screen,
-            prefs: prefs, height: full, interact: interact));
+            prefs: prefs, overrides: overrides, height: full, interact: interact));
   }
+
+  // Test build (--dart-define=FAKE_SERVER=true): fake login, OTP 123456.
+  final testBuild = [
+    authServiceProvider.overrideWith(
+        (ref) => FakeAuthService(FakeApi(), ref.watch(sharedPrefsProvider))),
+  ];
 
   both('login', const LoginScreen(), 800);
   both('otp', const OtpScreen(session: OtpSession(phone: '9876543210')), 800,
       interact: (t) => t.enterText(find.byType(TextField), '4821'));
   both('name', const NameScreen(), 800);
+  both('login_test', const LoginScreen(), 800, overrides: testBuild);
+  both('otp_test', const OtpScreen(session: OtpSession(phone: '9876543210')), 800,
+      overrides: testBuild);
   both('home', const HomeScreen(), 2600, prefs: bookingPrefs());
   both('home_new', const HomeScreen(), 2400);
   both('home_repeat', const HomeScreen(), 2400, prefs: repeatPrefs());

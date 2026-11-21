@@ -1,6 +1,9 @@
 import 'package:cleancruisers_app/core/theme.dart';
+import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
+import 'package:cleancruisers_app/data/auth_service.dart';
 import 'package:cleancruisers_app/data/booking_cloud.dart' show OtpSession;
 import 'package:cleancruisers_app/models/service.dart';
+import 'package:cleancruisers_app/providers/api_providers.dart';
 import 'package:cleancruisers_app/providers/app_providers.dart';
 import 'package:cleancruisers_app/screens/addresses_screen.dart';
 import 'package:cleancruisers_app/screens/auth/login_screen.dart';
@@ -24,7 +27,9 @@ import 'fixtures.dart';
 
 /// Renders a screen at phone size and fails on any RenderFlex overflow.
 Future<void> pumpAt(WidgetTester tester, Widget screen,
-    {required double textScale, Map<String, Object> saved = const {}}) async {
+    {required double textScale,
+    Map<String, Object> saved = const {},
+    List<Override> overrides = const []}) async {
   SharedPreferences.setMockInitialValues(saved);
   final prefs = await SharedPreferences.getInstance();
   tester.view.physicalSize =
@@ -33,7 +38,7 @@ Future<void> pumpAt(WidgetTester tester, Widget screen,
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(ProviderScope(
-    overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+    overrides: [sharedPrefsProvider.overrideWithValue(prefs), ...overrides],
     child: MaterialApp(
       theme: AppTheme.light,
       home: MediaQuery(
@@ -103,6 +108,19 @@ void main() {
           (tester) async {
         final (screen, prefs) = e.value;
         await pumpAt(tester, screen, textScale: scale, saved: prefs);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    for (final e in {
+      'Login (test build)': const LoginScreen(),
+      'OTP (test build)': const OtpScreen(session: OtpSession(phone: '9876543210')),
+    }.entries) {
+      testWidgets('${e.key} has no overflow at text scale $scale', (tester) async {
+        await pumpAt(tester, e.value, textScale: scale, overrides: [
+          authServiceProvider.overrideWith(
+              (ref) => FakeAuthService(FakeApi(), ref.watch(sharedPrefsProvider))),
+        ]);
         expect(tester.takeException(), isNull);
       });
     }

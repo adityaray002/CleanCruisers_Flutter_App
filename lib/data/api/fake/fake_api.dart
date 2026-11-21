@@ -133,6 +133,11 @@ class FakeApi implements CleanCruisersApi {
   int _invoiceSeq = 0;
   int _idSeq = 0;
 
+  /// Called after every change, so a test build can save the state
+  /// (see [toJson] / [restore]).
+  void Function()? onChange;
+  void _changed() => onChange?.call();
+
   // ── Fake login ──────────────────────────────────────────────────────────────
 
   /// Test builds: any 10-digit phone, OTP is [fakeOtp].
@@ -145,9 +150,19 @@ class FakeApi implements CleanCruisersApi {
     }
     _phone = phone;
     _customer(phone);
+    _changed();
   }
 
-  void signOut() => _phone = null;
+  void signOut() {
+    _phone = null;
+    _changed();
+  }
+
+  /// The saved name of [phone], or null (used by the fake login).
+  String? nameOf(String phone) {
+    final n = _customers[phone]?.name ?? '';
+    return n.isEmpty ? null : n;
+  }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -393,6 +408,7 @@ class FakeApi implements CleanCruisersApi {
       if (l.remaining > 0 && l.expiresOn.isBefore(_today)) {
         _entry(phone, -l.remaining, 'expired', 'Credit expired');
         l.remaining = 0;
+        _changed();
       }
     }
   }
@@ -822,6 +838,7 @@ class FakeApi implements CleanCruisersApi {
       }
       c.referredBy = owner.phone;
     }
+    _changed();
     return me();
   }
 
@@ -848,6 +865,7 @@ class FakeApi implements CleanCruisersApi {
       }
     }
     list.add(saved);
+    _changed();
     return saved;
   }
 
@@ -863,6 +881,7 @@ class FakeApi implements CleanCruisersApi {
       }
     }
     list[i] = saved;
+    _changed();
     return saved;
   }
 
@@ -876,6 +895,7 @@ class FakeApi implements CleanCruisersApi {
     }
     list.removeWhere((a) => a.id == id);
     if (list.isNotEmpty && !list.any((a) => a.isDefault)) list[0] = list[0].copyWith(isDefault: true);
+    _changed();
   }
 
   // ── Booking ─────────────────────────────────────────────────────────────────
@@ -1032,6 +1052,7 @@ class FakeApi implements CleanCruisersApi {
         _reprice(other);
       }
     }
+    _changed();
     return _view(j);
   }
 
@@ -1105,6 +1126,7 @@ class FakeApi implements CleanCruisersApi {
       default:
         _notAllowed(j);
     }
+    _changed();
     return _view(j);
   }
 
@@ -1126,6 +1148,7 @@ class FakeApi implements CleanCruisersApi {
     }
     j.openRequest = OpenRequest(kind: 'changeTime', slot: SlotPick(day, slot.start), at: _now);
     j.history.add(StatusEntry(j.state, _now, 'New time requested'));
+    _changed();
     return _view(j);
   }
 
@@ -1154,6 +1177,7 @@ class FakeApi implements CleanCruisersApi {
     j.openRequest = null;
     _log(j, BookingState.confirmed, 'New time accepted');
     _send(j.phone, 'booking_confirmed', 'Confirmed: ${dateKey(j.date)} ${clockLabel(j.start)} (${j.ref})');
+    _changed();
     return _view(j);
   }
 
@@ -1163,6 +1187,7 @@ class FakeApi implements CleanCruisersApi {
     if (j.offer == null) _notAllowed(j);
     j.offer = null;
     j.history.add(StatusEntry(j.state, _now, 'Offered time declined'));
+    _changed();
     return _view(j);
   }
 
@@ -1172,6 +1197,7 @@ class FakeApi implements CleanCruisersApi {
     if (j.offer?.reason != 'rain' || j.openRequest != null) _notAllowed(j);
     j.openRequest = OpenRequest(kind: 'keepAsPlanned', reason: 'Covered parking', at: _now);
     j.history.add(StatusEntry(j.state, _now, 'Asked to keep the wash: covered parking'));
+    _changed();
     return _view(j);
   }
 
@@ -1207,6 +1233,7 @@ class FakeApi implements CleanCruisersApi {
     j.duration = c.newDurationMinutes;
     j.pendingChange = null;
     j.history.add(StatusEntry(j.state, _now, 'New car size accepted'));
+    _changed();
     return _view(j);
   }
 
@@ -1218,6 +1245,7 @@ class FakeApi implements CleanCruisersApi {
     _returnCredit(j);
     _releaseCoupon(j);
     _log(j, BookingState.cancelled, 'Cancelled: car size didn’t match, no fee');
+    _changed();
     return _view(j);
   }
 
@@ -1279,6 +1307,7 @@ class FakeApi implements CleanCruisersApi {
       return (plan: _planView(rec), booking: b);
     } catch (_) {
       _plans.remove(rec);
+      _changed();
       rethrow;
     }
   }
@@ -1338,6 +1367,7 @@ class FakeApi implements CleanCruisersApi {
           'Your CleanCruisers booking ${j.ref} is confirmed for ${dateKey(j.date)}, '
           'expert arrives at ${clockLabel(j.start)}. Estimated bill ₹${j.bill.total}, pay after the service.');
     }
+    _changed();
     return _view(j);
   }
 
@@ -1363,6 +1393,7 @@ class FakeApi implements CleanCruisersApi {
     j.teamMessage = message;
     _log(j, BookingState.rescheduleNeeded, 'Team offered another time');
     _send(j.phone, 'time_offered', 'New time offered for ${j.ref}: ${dateKey(day)} ${clockLabel(slot.start)}');
+    _changed();
     return _view(j);
   }
 
@@ -1382,6 +1413,7 @@ class FakeApi implements CleanCruisersApi {
     final j = _job(ref);
     if (j.state != BookingState.confirmed) throw StateError('Booking $ref is ${j.state.name}');
     _log(j, BookingState.onTheWay, 'Expert on the way');
+    _changed();
     return _view(j);
   }
 
@@ -1392,6 +1424,7 @@ class FakeApi implements CleanCruisersApi {
     }
     if (j.pendingChange != null) throw StateError('Waiting for the customer to accept a change');
     _log(j, BookingState.inService, 'Work started');
+    _changed();
     return _view(j);
   }
 
@@ -1424,6 +1457,7 @@ class FakeApi implements CleanCruisersApi {
     }
     _send(j.phone, 'invoice', 'Thank you! GST invoice ${j.invoice!.number} for ${j.ref}. '
         'You earned ₹$cashback CleanCredit.');
+    _changed();
     return _view(j);
   }
 
@@ -1441,6 +1475,7 @@ class FakeApi implements CleanCruisersApi {
     _log(j, BookingState.missed, fee > 0 ? 'Customer not available: ₹$fee on the next booking' : 'Customer not available');
     _send(j.phone, 'missed', 'Our expert could not reach you for ${j.ref}.'
         '${fee > 0 ? ' A ₹$fee fee will be added to your next booking.' : ''}');
+    _changed();
     return _view(j);
   }
 
@@ -1455,6 +1490,7 @@ class FakeApi implements CleanCruisersApi {
     _returnCredit(j);
     _releaseCoupon(j);
     _log(j, BookingState.unableToServe, reason);
+    _changed();
     return _view(j);
   }
 
@@ -1499,6 +1535,7 @@ class FakeApi implements CleanCruisersApi {
       expiresAt: _now.add(Duration(minutes: settings.changeMinutes)),
     );
     j.history.add(StatusEntry(j.state, _now, 'Car size on site: ${carTypeNames[to]}'));
+    _changed();
     return _view(j);
   }
 
@@ -1540,6 +1577,7 @@ class FakeApi implements CleanCruisersApi {
         j.lunchPause = placed.paused.contains(j.ref);
         _log(j, BookingState.confirmed, 'Wash kept as planned');
     }
+    _changed();
     return _view(j);
   }
 
@@ -1550,6 +1588,7 @@ class FakeApi implements CleanCruisersApi {
     j.openRequest = null;
     j.teamMessage = message;
     j.history.add(StatusEntry(j.state, _now, message));
+    _changed();
     return _view(j);
   }
 
@@ -1565,13 +1604,38 @@ class FakeApi implements CleanCruisersApi {
         moved.add(j.ref);
       }
     }
+    _changed();
     return moved;
   }
 
-  void adminCloseDay(DateTime day, String reason) => _closedDays[dateKey(day)] = reason;
+  void adminCloseDay(DateTime day, String reason) {
+    _closedDays[dateKey(day)] = reason;
+    _changed();
+  }
 
-  void adminGoodwill(String phone, int amount, String reason) =>
-      _addCredit(phone, amount, 'goodwill', reason);
+  void adminGoodwill(String phone, int amount, String reason) {
+    _addCredit(phone, amount, 'goodwill', reason);
+    _changed();
+  }
+
+  /// Clears every customer, booking and credit (Test tools: start over).
+  void adminReset() {
+    _phone = null;
+    _customers.clear();
+    _addresses.clear();
+    _jobs.clear();
+    _plans.clear();
+    _entries.clear();
+    _lots.clear();
+    _couponUses.clear();
+    _quotes.clear();
+    _closedDays.clear();
+    _unavailable.clear();
+    outbox.clear();
+    _invoiceSeq = 0;
+    _idSeq = 0;
+    _changed();
+  }
 
   /// A SofaShine job that takes a shared worker's time (H5).
   void adminAddSofaShineJob(String workerId, DateTime day, int start, int duration) {
@@ -1591,5 +1655,226 @@ class FakeApi implements CleanCruisersApi {
     )
       ..workerId = workerId
       ..state = BookingState.confirmed);
+    _changed();
+  }
+
+  // ── Saving the state (test builds keep it across app restarts) ─────────────
+
+  static String? _d(DateTime? d) => d?.toIso8601String();
+  static DateTime? _p(Object? v) => v is String ? DateTime.parse(v) : null;
+  static Map<String, dynamic> _m(Object? v) => Map<String, dynamic>.from(v as Map);
+
+  Map<String, dynamic> toJson() => {
+        'v': 1,
+        'phone': _phone,
+        'idSeq': _idSeq,
+        'invoiceSeq': _invoiceSeq,
+        'customers': [
+          for (final c in _customers.values)
+            {
+              'phone': c.phone,
+              'name': c.name,
+              'car': c.car?.toJson(),
+              'referralCode': c.referralCode,
+              'referredBy': c.referredBy,
+              'referralRewarded': c.referralRewarded,
+              'lateFeeDue': c.lateFeeDue,
+              'noShows': c.noShows,
+            },
+        ],
+        'addresses': {
+          for (final e in _addresses.entries) e.key: [for (final a in e.value) a.toJson()],
+        },
+        'jobs': [
+          for (final j in _jobs)
+            {
+              'ref': j.ref,
+              'phone': j.phone,
+              'clientRef': j.clientRef,
+              'createdAt': _d(j.createdAt),
+              'external': j.external,
+              'request': j.request.toJson(),
+              'serviceId': j.service?.id,
+              'date': dateKey(j.date),
+              'start': j.start,
+              'duration': j.duration,
+              'address': j.address.toJson(),
+              'coverage': j.coverage.name,
+              'bill': j.bill.toJson(),
+              'state': j.state.name,
+              'history': [for (final h in j.history) h.toJson()],
+              'teamMessage': j.teamMessage,
+              'offer': j.offer?.toJson(),
+              'pendingChange': j.pendingChange?.toJson(),
+              'openRequest': j.openRequest?.toJson(),
+              'payment': j.payment.toJson(),
+              'invoice': j.invoice?.toJson(),
+              'workerId': j.workerId,
+              'needsReassign': j.needsReassign,
+              'lunchPause': j.lunchPause,
+              'holdUntil': _d(j.holdUntil),
+              'confirmBy': _d(j.confirmBy),
+              'couponCode': j.couponCode,
+              'creditUsed': j.creditUsed,
+              'planRecId': j.planRecId,
+            },
+        ],
+        'plans': [
+          for (final p in _plans)
+            {
+              'id': p.id,
+              'planId': p.planId,
+              'phone': p.phone,
+              'car': p.car.toJson(),
+              'price': p.price,
+              'visitsTotal': p.visitsTotal,
+              'days': p.days,
+              'addressId': p.addressId,
+              'startsOn': p.startsOn == null ? null : dateKey(p.startsOn!),
+              'endsOn': p.endsOn == null ? null : dateKey(p.endsOn!),
+              'paid': p.paid,
+              'cancelled': p.cancelled,
+            },
+        ],
+        'entries': {
+          for (final e in _entries.entries) e.key: [for (final w in e.value) w.toJson()],
+        },
+        'lots': {
+          for (final e in _lots.entries)
+            e.key: [
+              for (final l in e.value)
+                {'entryId': l.entryId, 'remaining': l.remaining, 'expiresOn': dateKey(l.expiresOn)},
+            ],
+        },
+        'couponUses': {for (final e in _couponUses.entries) e.key: e.value.toList()},
+        'closedDays': _closedDays,
+        'unavailable': _unavailable.toList(),
+        'outbox': [
+          for (final o in outbox)
+            {'phone': o.phone, 'template': o.template, 'text': o.text, 'at': _d(o.at)},
+        ],
+      };
+
+  /// Loads a state saved with [toJson]. Unknown versions are ignored.
+  void restore(Map<String, dynamic> j) {
+    if (j['v'] != 1) return;
+    _phone = j['phone'] as String?;
+    _idSeq = j['idSeq'] as int? ?? 0;
+    _invoiceSeq = j['invoiceSeq'] as int? ?? 0;
+    _customers
+      ..clear()
+      ..addAll({
+        for (final raw in j['customers'] as List? ?? const [])
+          (raw as Map)['phone'] as String: _Customer(raw['phone'] as String, raw['referralCode'] as String)
+            ..name = raw['name'] as String? ?? ''
+            ..car = raw['car'] == null ? null : ApiCar.fromJson(_m(raw['car']))
+            ..referredBy = raw['referredBy'] as String?
+            ..referralRewarded = raw['referralRewarded'] as bool? ?? false
+            ..lateFeeDue = raw['lateFeeDue'] as int? ?? 0
+            ..noShows = raw['noShows'] as int? ?? 0,
+      });
+    _addresses
+      ..clear()
+      ..addAll({
+        for (final e in _m(j['addresses'] ?? const {}).entries)
+          e.key: [for (final a in e.value as List) ApiAddress.fromJson(_m(a))],
+      });
+    _jobs
+      ..clear()
+      ..addAll([
+        for (final raw in j['jobs'] as List? ?? const [])
+          () {
+            final m = _m(raw);
+            final serviceId = m['serviceId'] as String?;
+            return _Job(
+              ref: m['ref'] as String,
+              phone: m['phone'] as String,
+              clientRef: m['clientRef'] as String?,
+              createdAt: DateTime.parse(m['createdAt'] as String),
+              external: m['external'] as bool? ?? false,
+              request: BookingRequest.fromJson(_m(m['request'])),
+              service: serviceId == null ? null : _catalog.service(serviceId),
+              date: parseDateKey(m['date'] as String),
+              start: m['start'] as int,
+              duration: m['duration'] as int,
+              address: ApiAddress.fromJson(_m(m['address'])),
+              coverage: coverageFrom(m['coverage'] as String?),
+              bill: Bill.fromJson(_m(m['bill'])),
+            )
+              ..state = bookingStateFrom(m['state'] as String)
+              ..teamMessage = m['teamMessage'] as String?
+              ..offer = m['offer'] == null ? null : TimeOffer.fromJson(_m(m['offer']))
+              ..pendingChange =
+                  m['pendingChange'] == null ? null : PendingChange.fromJson(_m(m['pendingChange']))
+              ..openRequest = m['openRequest'] == null ? null : OpenRequest.fromJson(_m(m['openRequest']))
+              ..payment = PaymentInfo.fromJson(_m(m['payment']))
+              ..invoice = m['invoice'] == null ? null : InvoiceRef.fromJson(_m(m['invoice']))
+              ..workerId = m['workerId'] as String?
+              ..needsReassign = m['needsReassign'] as bool? ?? false
+              ..lunchPause = m['lunchPause'] as bool? ?? false
+              ..holdUntil = _p(m['holdUntil'])
+              ..confirmBy = _p(m['confirmBy'])
+              ..couponCode = m['couponCode'] as String?
+              ..creditUsed = m['creditUsed'] as int? ?? 0
+              ..planRecId = m['planRecId'] as String?
+              ..history.addAll([for (final h in m['history'] as List? ?? const []) StatusEntry.fromJson(_m(h))]);
+          }(),
+      ]);
+    _plans
+      ..clear()
+      ..addAll([
+        for (final raw in j['plans'] as List? ?? const [])
+          () {
+            final m = _m(raw);
+            return _PlanRec(
+              m['id'] as String,
+              m['planId'] as String,
+              m['phone'] as String,
+              ApiCar.fromJson(_m(m['car'])),
+              m['price'] as int,
+              m['visitsTotal'] as int,
+              m['days'] as int,
+              m['addressId'] as String,
+            )
+              ..startsOn = m['startsOn'] == null ? null : parseDateKey(m['startsOn'] as String)
+              ..endsOn = m['endsOn'] == null ? null : parseDateKey(m['endsOn'] as String)
+              ..paid = m['paid'] as bool? ?? false
+              ..cancelled = m['cancelled'] as bool? ?? false;
+          }(),
+      ]);
+    _entries
+      ..clear()
+      ..addAll({
+        for (final e in _m(j['entries'] ?? const {}).entries)
+          e.key: [for (final w in e.value as List) WalletEntry.fromJson(_m(w))],
+      });
+    _lots
+      ..clear()
+      ..addAll({
+        for (final e in _m(j['lots'] ?? const {}).entries)
+          e.key: [
+            for (final l in e.value as List)
+              _Lot((l as Map)['entryId'] as String, l['remaining'] as int, parseDateKey(l['expiresOn'] as String)),
+          ],
+      });
+    _couponUses
+      ..clear()
+      ..addAll({
+        for (final e in _m(j['couponUses'] ?? const {}).entries)
+          e.key: {for (final p in e.value as List) p as String},
+      });
+    _closedDays
+      ..clear()
+      ..addAll({for (final e in _m(j['closedDays'] ?? const {}).entries) e.key: e.value as String});
+    _unavailable
+      ..clear()
+      ..addAll([for (final u in j['unavailable'] as List? ?? const []) u as String]);
+    outbox
+      ..clear()
+      ..addAll([
+        for (final raw in j['outbox'] as List? ?? const [])
+          FakeWhatsApp((raw as Map)['phone'] as String, raw['template'] as String, raw['text'] as String,
+              DateTime.parse(raw['at'] as String)),
+      ]);
   }
 }
