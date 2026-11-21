@@ -1,8 +1,8 @@
+import '../providers/booking_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme.dart';
-import '../providers/app_providers.dart';
 
 class MainShell extends ConsumerWidget {
   final Widget child;
@@ -19,61 +19,64 @@ class MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final upcoming =
-        ref.watch(bookingsProvider).where((b) => b.isUpcoming()).length;
+        ref.watch(myApiBookingsProvider).valueOrNull?.upcoming.length ?? 0;
     final index = _index(context);
 
-    return BackButtonListener(
-      onBackButtonPressed: () async {
-        if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
-        // Only Home closes the app; every other screen in the shell
-        // (including Services, which has no tab) goes back to Home.
-        if (GoRouterState.of(context).uri.path.startsWith('/home')) {
-          return false;
-        }
-        context.go('/home');
-        return true;
-      },
-      child: Scaffold(
-        body: child,
-        bottomNavigationBar: Column(mainAxisSize: MainAxisSize.min, children: [
-          DecoratedBox(
-            decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.border))),
-            child: NavigationBar(
-              selectedIndex: index,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              onDestinationSelected: (i) => context.go(_tabs[i]),
-              destinations: [
-                const NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home_rounded),
-                  label: 'Home',
+    return AutoRefresh(
+        onTick: (ref) => ref.invalidate(myApiBookingsProvider),
+        child: BackButtonListener(
+          onBackButtonPressed: () async {
+            if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+            // Only Home closes the app; every other screen in the shell
+            // (including Services, which has no tab) goes back to Home.
+            if (GoRouterState.of(context).uri.path.startsWith('/home')) {
+              return false;
+            }
+            context.go('/home');
+            return true;
+          },
+          child: Scaffold(
+            body: child,
+            bottomNavigationBar:
+                Column(mainAxisSize: MainAxisSize.min, children: [
+              DecoratedBox(
+                decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: AppColors.border))),
+                child: NavigationBar(
+                  selectedIndex: index,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  onDestinationSelected: (i) => context.go(_tabs[i]),
+                  destinations: [
+                    const NavigationDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                    ),
+                    NavigationDestination(
+                      icon: Badge(
+                        isLabelVisible: upcoming > 0,
+                        label: Text('$upcoming'),
+                        backgroundColor: AppColors.primary,
+                        child: const Icon(Icons.event_note_outlined),
+                      ),
+                      selectedIcon: const Icon(Icons.event_note_rounded),
+                      label: 'My Bookings',
+                    ),
+                    const NavigationDestination(
+                      icon: Icon(Icons.local_offer_outlined),
+                      selectedIcon: Icon(Icons.local_offer_rounded),
+                      label: 'Offers',
+                    ),
+                    const NavigationDestination(
+                      icon: Icon(Icons.person_outline_rounded),
+                      selectedIcon: Icon(Icons.person_rounded),
+                      label: 'Profile',
+                    ),
+                  ],
                 ),
-                NavigationDestination(
-                  icon: Badge(
-                    isLabelVisible: upcoming > 0,
-                    label: Text('$upcoming'),
-                    backgroundColor: AppColors.primary,
-                    child: const Icon(Icons.event_note_outlined),
-                  ),
-                  selectedIcon: const Icon(Icons.event_note_rounded),
-                  label: 'My Bookings',
-                ),
-                const NavigationDestination(
-                  icon: Icon(Icons.local_offer_outlined),
-                  selectedIcon: Icon(Icons.local_offer_rounded),
-                  label: 'Offers',
-                ),
-                const NavigationDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
-                ),
-              ],
-            ),
+              ),
+            ]),
           ),
-        ]),
-      ),
-    );
+        ));
   }
 }

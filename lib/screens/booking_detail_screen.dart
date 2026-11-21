@@ -3,163 +3,222 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
-import '../core/scheduling.dart' show canFinishByClose, clockLabel;
+import '../core/pricing.dart';
+import '../core/scheduling.dart' show clockLabel;
 import '../core/theme.dart';
+import '../data/api/api.dart';
+import '../data/api/models.dart';
 import '../data/business_info.dart';
-import '../models/booking.dart';
 import '../models/service.dart';
-import '../providers/app_providers.dart';
+import '../providers/api_providers.dart';
+import '../providers/booking_providers.dart';
 import '../widgets/booking_progress.dart';
 import '../widgets/contact_actions.dart';
 import '../widgets/ui.dart';
-import 'bookings_screen.dart' show statusChip;
 
-/// One booking (v3 design), built only from what the booking really holds:
-/// a status card for its state, any change the customer has asked for,
-/// the expert (once assigned), where and which car, the bill or receipt,
-/// the status history, and the actions that fit the state.
+/// One booking (v3 design), from the server (refreshed every 30 s and on
+/// pull): a status card for its state, any request the customer has made or
+/// change the expert found on site, where and which car, the bill or GST
+/// invoice, the status history, and the actions that fit the state.
 ///
-/// Cancelling and changing the time are *requests* to the team
-/// (requestCustomerChange); the page says so and never shows them as done.
+/// Cancelling a confirmed booking and changing the time are *requests* to
+/// the team (contract §6); the page says so and never shows them as done.
 class BookingDetailScreen extends ConsumerWidget {
   final String bookingRef;
   const BookingDetailScreen({super.key, required this.bookingRef});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final b = ref
-        .watch(myBookingsProvider)
-        .where((item) => item.ref == bookingRef)
-        .firstOrNull;
+    final async = ref.watch(apiBookingProvider(bookingRef));
+    final b = async.valueOrNull;
 
     if (b == null) {
       return Scaffold(
         appBar: AppBar(),
         body: Center(
-          child: EmptyState(
-            icon: Icons.event_busy_rounded,
-            title: 'Booking not found',
-            message: 'It may have been removed from this phone.',
-            action: PrimaryButton(
-                label: 'My bookings',
-                expand: false,
-                onPressed: () => context.go('/bookings')),
-          ),
+          child: async.isLoading
+              ? const CircularProgressIndicator()
+              : EmptyState(
+                  icon: Icons.event_busy_rounded,
+                  title: 'Booking not found',
+                  message: async.error is ApiException
+                      ? (async.error as ApiException).message
+                      : 'Check your connection and try again.',
+                  action: PrimaryButton(
+                      label: 'My bookings',
+                      expand: false,
+                      onPressed: () => context.go('/bookings')),
+                ),
         ),
       );
     }
 
-    final service = serviceById(b.serviceId);
+    final display = serviceById(b.service.id);
     final s = b.status;
-    final active = !s.isFinal;
-    final canChange = s == BookingStatus.requested ||
-        s == BookingStatus.teamReview ||
-        s == BookingStatus.confirmed;
-    final actions = _actions(context, ref, b, service, canChange);
+    final upcoming = s.isUpcoming;
+    final actions = _actions(context, ref, b, display);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark
-          .copyWith(statusBarColor: Colors.transparent),
-      child: Scaffold(
-        backgroundColor: AppColors.bg,
-        body: MediaQuery.withClampedTextScaling(
-          maxScaleFactor: 1.15,
-          child: SafeArea(
-            bottom: false,
-            child: RefreshIndicator(
-              onRefresh: () async =>
-                  ref.invalidate(customerCloudBookingsProvider),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xxl),
-                children: [
-                  _Header(
-                    title: service?.listName ?? b.serviceName,
-                    bookingRef: b.ref,
-                  ),
-                  const SizedBox(height: AppSpace.lg),
-                  _StatusCard(booking: b, service: service),
-                  if (b.customerChangeRequest != null && active) ...[
-                    const SizedBox(height: AppSpace.md),
-                    NoticeBox(
-                      icon: Icons.hourglass_top_rounded,
-                      warning: true,
-                      text: 'You asked: "${b.customerChangeRequest}". '
-                          'We\'ll confirm in the app.',
-                    ),
-                  ],
-                  if (s == BookingStatus.rescheduleNeeded) ...[
-                    const SizedBox(height: AppSpace.md),
-                    _HoldOptions(
-                      booking: b,
-                      onSend: (text) => _send(context, ref, b, text),
-                      onPickOther: () => _changeTime(context, ref, b),
-                    ),
-                  ],
-                  if (b.workerId != null && active) ...[
-                    const SizedBox(height: AppSpace.md),
-                    const _ExpertRow(),
-                  ],
-                  if (active) ...[
-                    const SizedBox(height: AppSpace.md),
-                    const NoticeBox(
-                      icon: Icons.water_drop_outlined,
-                      text: 'Before the slot: keep a water tap and plug point '
-                          'ready near the car. We bring 30 m cords and pipes.',
-                    ),
-                  ],
-                  const SizedBox(height: AppSpace.md),
-                  _Details(booking: b),
-                  const SizedBox(height: AppSpace.md),
-                  _Updates(booking: b),
-                  const SizedBox(height: AppSpace.md),
-                  AppCard(
-                    onTap: () => openWhatsApp(context),
-                    padding: const EdgeInsets.all(AppSpace.md),
-                    child: Row(children: [
-                      const IconBadge(Icons.chat_outlined, size: 40),
-                      const SizedBox(width: AppSpace.md),
-                      Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                  s == BookingStatus.completed
-                                      ? 'Something not right?'
-                                      : 'Need help?',
-                                  style: AppText.title),
-                              Text('Chat with us on WhatsApp',
-                                  style: AppText.small),
-                            ]),
+    return AutoRefresh(
+        onTick: (ref) => ref.invalidate(apiBookingProvider(bookingRef)),
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.dark
+              .copyWith(statusBarColor: Colors.transparent),
+          child: Scaffold(
+            backgroundColor: AppColors.bg,
+            body: MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.15,
+              child: SafeArea(
+                bottom: false,
+                child: RefreshIndicator(
+                  onRefresh: () =>
+                      ref.refresh(apiBookingProvider(bookingRef).future),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xxl),
+                    children: [
+                      _Header(
+                        title: display?.listName ?? b.service.name,
+                        bookingRef: b.ref,
                       ),
-                      const Icon(Icons.chevron_right_rounded,
-                          color: AppColors.textSubtle),
-                    ]),
+                      const SizedBox(height: AppSpace.lg),
+                      _StatusCard(booking: b, display: display),
+                      if (b.pendingChange != null) ...[
+                        const SizedBox(height: AppSpace.md),
+                        _ChangeOnSite(
+                          booking: b,
+                          onAccept: () => _run(
+                              context,
+                              ref,
+                              b,
+                              (api) =>
+                                  api.acceptChange(b.ref, b.pendingChange!.id),
+                              'New car size accepted. The expert can start.'),
+                          onReject: () => _rejectChange(context, ref, b),
+                        ),
+                      ],
+                      if (b.openRequest != null && upcoming) ...[
+                        const SizedBox(height: AppSpace.md),
+                        NoticeBox(
+                          icon: Icons.hourglass_top_rounded,
+                          warning: true,
+                          text: _requestText(b.openRequest!),
+                        ),
+                      ],
+                      if (b.teamMessage != null &&
+                          upcoming &&
+                          s != BookingState.rescheduleNeeded) ...[
+                        const SizedBox(height: AppSpace.md),
+                        NoticeBox(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          text: 'From the team: ${b.teamMessage}',
+                        ),
+                      ],
+                      if (s == BookingState.rescheduleNeeded &&
+                          b.openRequest == null) ...[
+                        const SizedBox(height: AppSpace.md),
+                        _HoldOptions(
+                          booking: b,
+                          onAccept: () => _run(
+                              context,
+                              ref,
+                              b,
+                              (api) => api.acceptOffer(b.ref),
+                              'New time confirmed.'),
+                          onKeep: () => _run(
+                              context,
+                              ref,
+                              b,
+                              (api) => api.keepAsPlanned(b.ref),
+                              'Sent. We\'ll confirm on WhatsApp.'),
+                          onPickOther: () => _changeTime(context, ref, b),
+                        ),
+                      ],
+                      if (const [
+                        BookingState.confirmed,
+                        BookingState.onTheWay,
+                        BookingState.inService
+                      ].contains(s)) ...[
+                        const SizedBox(height: AppSpace.md),
+                        const _ExpertRow(),
+                      ],
+                      if (upcoming) ...[
+                        const SizedBox(height: AppSpace.md),
+                        const NoticeBox(
+                          icon: Icons.water_drop_outlined,
+                          text:
+                              'Before the slot: keep a water tap and plug point '
+                              'ready near the car. We bring 30 m cords and pipes.',
+                        ),
+                      ],
+                      const SizedBox(height: AppSpace.md),
+                      _Details(booking: b),
+                      const SizedBox(height: AppSpace.md),
+                      _Updates(booking: b),
+                      const SizedBox(height: AppSpace.md),
+                      AppCard(
+                        onTap: () => openWhatsApp(context),
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        child: Row(children: [
+                          const IconBadge(Icons.chat_outlined, size: 40),
+                          const SizedBox(width: AppSpace.md),
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      s == BookingState.completed
+                                          ? 'Something not right?'
+                                          : 'Need help?',
+                                      style: AppText.title),
+                                  Text('Chat with us on WhatsApp',
+                                      style: AppText.small),
+                                ]),
+                          ),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textSubtle),
+                        ]),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
+            bottomNavigationBar: actions == null
+                ? null
+                : MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: 1.15, child: actions),
           ),
-        ),
-        bottomNavigationBar: actions == null
-            ? null
-            : MediaQuery.withClampedTextScaling(
-                maxScaleFactor: 1.15, child: actions),
-      ),
-    );
+        ));
   }
 
-  Widget? _actions(BuildContext context, WidgetRef ref, BookingRecord b,
-      CarService? service, bool canChange) {
-    if (b.status == BookingStatus.completed && service != null) {
+  static String _requestText(OpenRequest r) => switch (r.kind) {
+        'cancel' => r.fee > 0
+            ? 'You asked to cancel. ₹${r.fee} will be added to your next '
+                'booking. We\'ll confirm on WhatsApp.'
+            : 'You asked to cancel, free of charge. We\'ll confirm on WhatsApp.',
+        'changeTime' => r.slot == null
+            ? 'You asked for a new time. We\'ll confirm on WhatsApp.'
+            : 'You asked to move it to ${friendlyDate(r.slot!.date)}, '
+                '${clockLabel(r.slot!.start)}. We\'ll confirm on WhatsApp.',
+        'keepAsPlanned' =>
+          'You told us the car is in covered parking. We\'ll confirm the wash.',
+        _ => 'Your request is with the team.',
+      };
+
+  Widget? _actions(
+      BuildContext context, WidgetRef ref, Booking b, CarService? display) {
+    if (b.status == BookingState.completed &&
+        display != null &&
+        b.plan == null) {
+      final today = ref.watch(catalogProvider).valueOrNull?.service(display.id);
+      final price = today?.priceFor(b.car.type) ?? display.priceFor(b.car.type);
       return BottomActionBar(
         child: Row(children: [
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(rupees(service.priceFor(b.car)),
-                  style: AppText.price),
+              Text(rupees(price), style: AppText.price),
               Text('today\'s price', style: AppText.caption),
             ],
           ),
@@ -168,18 +227,18 @@ class BookingDetailScreen extends ConsumerWidget {
             child: PrimaryButton(
               label: 'Book again',
               onPressed: () =>
-                  context.push('/book/${service.id}?car=${b.car.name}'),
+                  context.push('/book/${display.id}?car=${b.car.type.name}'),
             ),
           ),
         ]),
       );
     }
-    if (canChange && b.customerChangeRequest == null) {
+    if (b.canCancel || b.canChangeTime) {
       return BottomActionBar(
         child: Row(children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: () => _cancel(context, ref, b),
+              onPressed: b.canCancel ? () => _cancel(context, ref, b) : null,
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 54),
                 foregroundColor: AppColors.text,
@@ -195,19 +254,20 @@ class BookingDetailScreen extends ConsumerWidget {
             child: SecondaryButton(
               label: 'Change time',
               icon: Icons.edit_calendar_outlined,
-              onPressed: () => _changeTime(context, ref, b),
+              onPressed:
+                  b.canChangeTime ? () => _changeTime(context, ref, b) : null,
             ),
           ),
         ]),
       );
     }
-    if (b.status == BookingStatus.onTheWay) {
+    if (b.status == BookingState.onTheWay) {
       return BottomActionBar(
         top: Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.sm),
           child: Text(
-              'The expert has left. Cancelling now adds ₹100 to your next '
-              'booking.',
+              'The expert has left. To cancel now, chat with us; ₹100 is '
+              'added to your next booking.',
               textAlign: TextAlign.center,
               style: AppText.caption),
         ),
@@ -221,18 +281,18 @@ class BookingDetailScreen extends ConsumerWidget {
     return null;
   }
 
-  // ── Requests to the team ───────────────────────────────────────────────────
-  static Future<void> _send(BuildContext context, WidgetRef ref,
-      BookingRecord booking, String request) async {
+  // ── Calls to the server ────────────────────────────────────────────────────
+  /// Runs one customer action and shows the result (or the server's reason).
+  static Future<void> _run(BuildContext context, WidgetRef ref, Booking b,
+      Future<Booking> Function(CleanCruisersApi api) call, String done) async {
     try {
-      await ref
-          .read(bookingCloudProvider)
-          .requestCustomerChange(booking, request);
-      ref.invalidate(customerCloudBookingsProvider);
-      if (context.mounted) {
-        showMessage(context, 'Request sent. We\'ll confirm in the app.');
-      }
-    } catch (_) {
+      await call(ref.read(apiProvider));
+      refreshBooking(ref, b.ref);
+      if (context.mounted) showMessage(context, done);
+    } on ApiException catch (e) {
+      refreshBooking(ref, b.ref);
+      if (context.mounted) showMessage(context, e.message);
+    } on Object {
       if (context.mounted) {
         showMessage(
             context, 'Couldn\'t send. Check your internet and try again.');
@@ -240,53 +300,69 @@ class BookingDetailScreen extends ConsumerWidget {
     }
   }
 
-  /// Days (from tomorrow) and windows the customer can ask to move to.
+  /// Ask for another start time (the server lists what is open).
   static Future<void> _changeTime(
-      BuildContext context, WidgetRef ref, BookingRecord booking) async {
-    final today = dateOnly(DateTime.now());
-    final minutes = booking.serviceDurationMinutes;
-    final days = [
-      for (var i = 1; i <= 7; i++) addDays(today, i),
-    ]
-        .where((d) => timeSlots.any((s) =>
-            s.isAvailable(d) && canFinishByClose(s.startMinute, minutes)))
-        .take(5)
-        .toList();
-    final picked = await showModalBottomSheet<String>(
+      BuildContext context, WidgetRef ref, Booking b) async {
+    final picked = await showModalBottomSheet<SlotPick>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (ctx) => _ChangeTimeSheet(days: days, minutes: minutes),
+      builder: (ctx) => _ChangeTimeSheet(booking: b),
     );
-    if (picked != null && context.mounted) {
-      await _send(context, ref, booking, picked);
-    }
+    if (picked == null || !context.mounted) return;
+    await _run(context, ref, b, (api) => api.changeTime(b.ref, picked),
+        'New time requested. We\'ll confirm on WhatsApp.');
   }
 
   static Future<void> _cancel(
-      BuildContext context, WidgetRef ref, BookingRecord booking) async {
+      BuildContext context, WidgetRef ref, Booking b) async {
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (ctx) => const _CancelSheet(),
+      builder: (ctx) => _CancelSheet(booking: b),
     );
     if (result == null || !context.mounted) return;
     if (result == _CancelSheet.changeInstead) {
-      return _changeTime(context, ref, booking);
+      return _changeTime(context, ref, b);
     }
-    // CleanCredit used on this booking goes back to the wallet, as before.
-    final wallet = ref.read(walletProvider);
-    final appliedTx = wallet.transactions
-        .where((t) => t.referenceId == booking.ref && t.amount < 0)
-        .firstOrNull;
-    if (appliedTx != null) {
-      await ref
-          .read(walletProvider.notifier)
-          .refundCredit(appliedTx.amount.abs(), booking.ref);
-    }
-    if (!context.mounted) return;
-    await _send(context, ref, booking, result);
+    final reason = result.isEmpty ? null : result;
+    await _run(
+        context,
+        ref,
+        b,
+        (api) => api.cancel(b.ref, reason: reason),
+        b.status == BookingState.confirmed
+            ? 'Cancellation requested. We\'ll confirm on WhatsApp.'
+            : 'Booking cancelled.');
+  }
+
+  static Future<void> _rejectChange(
+      BuildContext context, WidgetRef ref, Booking b) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel this wash?'),
+        content: const Text(
+            'Without the new price the expert can\'t start. The booking is '
+            'cancelled with no fee, and you can book again for the right car.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Go back')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Cancel wash')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await _run(
+        context,
+        ref,
+        b,
+        (api) => api.rejectChange(b.ref, b.pendingChange!.id),
+        'Cancelled. No fee.');
   }
 }
 
@@ -345,24 +421,24 @@ class _Header extends StatelessWidget {
 
 // ── Status card, one look per state ──────────────────────────────────────────
 class _StatusCard extends StatelessWidget {
-  final BookingRecord booking;
-  final CarService? service;
-  const _StatusCard({required this.booking, required this.service});
+  final Booking booking;
+  final CarService? display;
+  const _StatusCard({required this.booking, required this.display});
 
   static const _muted = Color(0xFFB8C0C7);
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final slot = slotById(b.slotId)?.short ?? b.slotLabel;
-    final arrival = b.confirmedArrivalLabel;
-    final (chip, tone) = statusChip(b);
+    final arrives = clockLabel(b.slot.start);
+    final ready = clockLabel(b.slot.end);
+    final (chip, tone) = chipOf(b.status);
 
     switch (b.status) {
-      case BookingStatus.confirmed:
-      case BookingStatus.onTheWay:
-      case BookingStatus.inService:
-        final step = progressIndex(b.status) ?? 1;
+      case BookingState.confirmed:
+      case BookingState.onTheWay:
+      case BookingState.inService:
+        final step = progressIndex(progressStatusOf(b.status)) ?? 1;
         return Container(
           padding: const EdgeInsets.all(AppSpace.lg),
           decoration: BoxDecoration(
@@ -371,54 +447,54 @@ class _StatusCard extends StatelessWidget {
           ),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$chip · ${friendlyDate(b.date)}'.toUpperCase(),
+            Text('$chip · ${friendlyDate(b.slot.date)}'.toUpperCase(),
                 style: AppText.overline.copyWith(color: AppColors.brand)),
             const SizedBox(height: AppSpace.md),
             Text(
-                b.status == BookingStatus.onTheWay
+                b.status == BookingState.onTheWay
                     ? 'Your expert is on the way'
-                    : b.status == BookingStatus.inService
+                    : b.status == BookingState.inService
                         ? 'Your car is being cleaned'
                         : 'Your expert arrives',
                 style: AppText.small.copyWith(color: _muted)),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(slot,
+              child: Text(
+                  b.status == BookingState.inService
+                      ? 'Ready ~$ready'
+                      : arrives,
                   style: AppText.display.copyWith(color: Colors.white)),
             ),
-            if (arrival != null)
-              Text('Likely around $arrival',
+            if (b.status != BookingState.inService)
+              Text('Car ready by about $ready',
                   style: AppText.small.copyWith(color: _muted)),
             const SizedBox(height: AppSpace.lg),
             _DarkProgress(current: step),
           ]),
         );
-      case BookingStatus.requested:
-      case BookingStatus.teamReview:
+      case BookingState.requested:
         return _LightCard(
           border: const Color(0xFFF3D9A8),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Pill(chip, tone: tone),
             const SizedBox(height: AppSpace.md),
-            Text('You asked for ${friendlyDate(b.date)}', style: AppText.small),
+            Text('You asked for ${friendlyDate(b.slot.date)}',
+                style: AppText.small),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(slot, style: AppText.display),
+              child: Text(arrives, style: AppText.display),
             ),
             const SizedBox(height: 4),
-            Text(
-                b.customerNote ??
-                    'We usually confirm within $kConfirmUsually. '
-                        'You\'ll see it here.',
-                style: AppText.small),
+            Text(b.statusNote, style: AppText.small),
             const SizedBox(height: AppSpace.lg),
-            BookingProgress(status: b.status),
+            BookingProgress(status: progressStatusOf(b.status)),
           ]),
         );
-      case BookingStatus.rescheduleNeeded:
+      case BookingState.rescheduleNeeded:
+        final rain = b.offer?.reason == 'rain';
         return _LightCard(
           border: const Color(0xFFF3D9A8),
           child:
@@ -431,7 +507,10 @@ class _StatusCard extends StatelessWidget {
                   color: AppColors.warningSoft,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: const Icon(Icons.thunderstorm_outlined,
+                child: Icon(
+                    rain
+                        ? Icons.thunderstorm_outlined
+                        : Icons.event_repeat_rounded,
                     color: AppColors.warning),
               ),
               const SizedBox(width: AppSpace.md),
@@ -441,14 +520,14 @@ class _StatusCard extends StatelessWidget {
             Text('Your slot needs a new time', style: AppText.h3),
             const SizedBox(height: 4),
             Text(
-                b.customerNote ??
-                    'Your wash on ${friendlyDate(b.date)}, $slot is on hold. '
-                        'Choose what works for you below.',
+                b.teamMessage ??
+                    'Your wash on ${friendlyDate(b.slot.date)}, $arrives is on '
+                        'hold. Choose what works for you below.',
                 style: AppText.small),
           ]),
         );
-      case BookingStatus.completed:
-        final photo = service?.cardPhoto;
+      case BookingState.completed:
+        final photo = display?.cardPhoto;
         return ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.lg),
           child: SizedBox(
@@ -486,7 +565,7 @@ class _StatusCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(AppRadius.pill),
                         ),
                         child: Text(
-                            'DONE · ${friendlyDate(b.date)}'.toUpperCase(),
+                            'DONE · ${friendlyDate(b.slot.date)}'.toUpperCase(),
                             style: AppText.overline
                                 .copyWith(color: AppColors.ink)),
                       ),
@@ -498,23 +577,23 @@ class _StatusCard extends StatelessWidget {
             ]),
           ),
         );
-      case BookingStatus.cancelled:
-      case BookingStatus.unableToServe:
+      case BookingState.missed:
+      case BookingState.cancelled:
+      case BookingState.unableToServe:
         return _LightCard(
           border: AppColors.border,
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Pill(chip, tone: tone),
             const SizedBox(height: AppSpace.md),
-            Text(
-                b.status == BookingStatus.cancelled
-                    ? 'Booking cancelled'
-                    : 'We couldn\'t take this booking',
-                style: AppText.h3),
+            Text(headlineOf(b), style: AppText.h3),
             const SizedBox(height: 4),
             Text(
-                b.customerNote ??
-                    '${friendlyDate(b.date)}, $slot. Nothing to pay.',
+                b.teamMessage ??
+                    (b.status == BookingState.missed
+                        ? 'The expert came on ${shortDate(b.slot.date)} but '
+                            "couldn't find you or the car. Book again any time."
+                        : '${friendlyDate(b.slot.date)}, $arrives. Nothing to pay.'),
                 style: AppText.small),
           ]),
         );
@@ -616,21 +695,20 @@ class _DarkProgress extends StatelessWidget {
   }
 }
 
-// ── Rain hold: the team's offer, covered parking, or another time ────────────
+// ── The team asks for a new time: their offer, covered parking, or another ──
 class _HoldOptions extends StatelessWidget {
-  final BookingRecord booking;
-  final ValueChanged<String> onSend;
-  final VoidCallback onPickOther;
+  final Booking booking;
+  final VoidCallback onAccept, onKeep, onPickOther;
   const _HoldOptions(
-      {required this.booking, required this.onSend, required this.onPickOther});
+      {required this.booking,
+      required this.onAccept,
+      required this.onKeep,
+      required this.onPickOther});
 
   @override
   Widget build(BuildContext context) {
-    final b = booking;
-    final offeredSlot = slotById(b.offeredSlotId);
-    final offer = b.offeredDate != null && offeredSlot != null
-        ? '${friendlyDate(b.offeredDate!)}, ${offeredSlot.short}'
-        : null;
+    final o = booking.offer;
+    final expired = o != null && !o.expiresAt.isAfter(DateTime.now());
 
     Widget option(String title, String line, VoidCallback onTap,
             {bool primary = false}) =>
@@ -661,15 +739,63 @@ class _HoldOptions extends StatelessWidget {
         );
 
     return Column(children: [
-      if (offer != null)
-        option('Take the new slot', offer,
-            () => onSend('Accept the offered slot: $offer'),
+      if (o != null && !expired)
+        option(
+            'Take the new slot',
+            '${friendlyDate(o.slot.date)}, expert arrives '
+                '${clockLabel(o.slot.start)}',
+            onAccept,
             primary: true),
-      option('My car is in covered parking', 'Keep the wash as planned',
-          () => onSend('Covered parking: keep the wash as planned')),
+      if (o?.reason == 'rain')
+        option(
+            'My car is in covered parking', 'Keep the wash as planned', onKeep),
       option('Pick another day or time', 'Choose a time that suits you',
           onPickOther),
     ]);
+  }
+}
+
+// ── Car size found on site (contract 2.2) ─────────────────────────────────────
+/// "a Hatchback", "an SUV", "a luxury car".
+String _aCar(CarType c) => switch (c) {
+      CarType.suv => 'an SUV',
+      CarType.luxury => 'a luxury car',
+      _ => 'a ${carTypeNames[c]}',
+    };
+
+String _capital(String s) => s[0].toUpperCase() + s.substring(1);
+
+class _ChangeOnSite extends StatelessWidget {
+  final Booking booking;
+  final VoidCallback onAccept, onReject;
+  const _ChangeOnSite(
+      {required this.booking, required this.onAccept, required this.onReject});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = booking.pendingChange!;
+    return _LightCard(
+      border: AppColors.warning,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('The expert found ${_aCar(c.to)}', style: AppText.h3),
+        const SizedBox(height: 4),
+        Text(
+            'You booked for ${_aCar(c.from)}. '
+            '${_capital(_aCar(c.to))} takes longer, so the price changes from '
+            '${rupees(booking.bill.total)} to ${rupees(c.newBill.total)}. '
+            'The expert starts once you accept.',
+            style: AppText.small),
+        const SizedBox(height: AppSpace.md),
+        PrimaryButton(
+            label: 'Accept ${rupees(c.newBill.total)}', onPressed: onAccept),
+        TextButton(
+          onPressed: onReject,
+          style: TextButton.styleFrom(
+              foregroundColor: AppColors.error, minimumSize: const Size(0, 44)),
+          child: const Text('Don\'t accept, cancel the wash'),
+        ),
+      ]),
+    );
   }
 }
 
@@ -705,19 +831,28 @@ class _ExpertRow extends StatelessWidget {
 
 // ── Where, which car, and the bill or receipt ────────────────────────────────
 class _Details extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   const _Details({required this.booking});
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final done = b.status == BookingStatus.completed;
-    final paid = b.amountCollected ?? b.payable;
-    final method = switch (b.paymentMethod) {
-      PaymentMethod.cash => 'Cash',
-      PaymentMethod.upi => 'UPI',
-      null => null,
+    final bill = b.bill;
+    final done = b.status == BookingState.completed;
+    final paid = b.payment.status == 'paid';
+    final notCharged = const [
+      BookingState.cancelled,
+      BookingState.missed,
+      BookingState.unableToServe,
+    ].contains(b.status);
+    final method = switch (b.payment.method) {
+      'cash' => 'Cash',
+      'upi' => 'UPI',
+      _ => null,
     };
+    final car = b.car.model.trim().isEmpty
+        ? carTypeNames[b.car.type]!
+        : '${b.car.model.trim()} · ${carTypeNames[b.car.type]}';
     Widget line(String label, String value, {bool green = false}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 3),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -745,50 +880,75 @@ class _Details extends StatelessWidget {
             ),
           ]),
         );
+    String discountLabel(BillDiscount d) => switch (d.kind) {
+          'coupon' => 'Coupon ${d.code ?? ''}',
+          'credit' => 'CleanCredit',
+          'plan' => d.name ?? 'Plan visit',
+          _ => d.name ?? 'Offer',
+        };
 
     return AppCard(
       radius: AppRadius.lg,
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        place(Icons.location_on_outlined, 'Car parked at', b.address),
-        place(Icons.directions_car_outlined, b.carLabel,
-            '${friendlyDate(b.date)}, ${slotById(b.slotId)?.short ?? b.slotLabel}'),
-        if (b.forSomeoneElse && b.recipientName != null)
+        place(Icons.location_on_outlined, 'Car parked at',
+            b.address.line.isEmpty ? b.address.area : b.address.line),
+        place(
+            Icons.directions_car_outlined,
+            car,
+            '${friendlyDate(b.slot.date)}, expert arrives '
+            '${clockLabel(b.slot.start)}'),
+        if (b.plan != null)
+          place(Icons.event_repeat_rounded, 'Monthly plan',
+              'Visit ${b.plan!.visitNumber} of ${b.plan!.visitsTotal}'),
+        if (b.recipient != null)
           place(Icons.person_outline_rounded, 'At the car',
-              '${b.recipientName}${b.recipientPhone == null ? '' : ' · ${phoneLabel(b.recipientPhone!)}'}'),
+              '${b.recipient!.name}${b.recipient!.phone.isEmpty ? '' : ' · ${phoneLabel(b.recipient!.phone)}'}'),
         const Divider(height: AppSpace.lg),
         Row(children: [
           Expanded(
               child: Text(done ? 'Receipt' : 'Bill', style: AppText.title)),
-          if (done && method != null)
-            Pill('Paid · $method',
+          if (paid)
+            Pill('Paid${method == null ? '' : ' · $method'}',
                 icon: Icons.check_rounded, tone: PillTone.brand),
         ]),
         const SizedBox(height: AppSpace.sm),
-        line(serviceById(b.serviceId)?.listName ?? b.serviceName,
-            rupees(b.servicePrice)),
-        for (final (name, qty, price) in b.extras)
-          line(qty > 1 ? '$name × $qty' : name, rupees(price)),
-        if (b.couponDiscount > 0)
-          line('Coupon ${b.couponCode ?? ''}', '-${rupees(b.couponDiscount)}',
-              green: true),
-        if (b.creditUsed > 0)
-          line('CleanCredit', '-${rupees(b.creditUsed)}', green: true),
+        for (final i in bill.items)
+          line(i.qty > 1 ? '${i.name} × ${i.qty}' : i.name, rupees(i.amount)),
+        for (final d in bill.discounts)
+          line(discountLabel(d), '-${rupees(d.amount)}', green: true),
+        if (bill.lateCancelFee > 0)
+          line('Late cancellation fee (earlier booking)',
+              rupees(bill.lateCancelFee)),
         const Divider(height: AppSpace.lg),
         Row(children: [
           Expanded(
             child: Text(
-                done
+                paid
                     ? 'Paid'
-                    : kPayAfterService
-                        ? 'Pay after the service'
-                        : 'To pay',
+                    : notCharged
+                        ? 'Not charged'
+                        : kPayAfterService
+                            ? 'Pay after the service'
+                            : 'To pay',
                 style: AppText.bodyStrong),
           ),
-          Text(rupees(done ? paid : b.payable), style: AppText.priceSm),
+          Text(notCharged && !paid ? '₹0' : rupees(bill.total),
+              style: AppText.priceSm),
         ]),
-        if (!done && kPayAfterService)
-          Text('Cash or UPI to the expert', style: AppText.caption),
+        if (!notCharged)
+          Text(
+            'Includes GST ${rupees(bill.gst.cgst + bill.gst.sgst)} '
+            '(${bill.gst.rate}%)${!paid && kPayAfterService ? ' · cash or UPI to the expert' : ''}',
+            style: AppText.caption),
+        if (b.invoice != null) ...[
+          const SizedBox(height: AppSpace.md),
+          SecondaryButton(
+            label: 'GST invoice ${b.invoice!.number}',
+            icon: Icons.receipt_long_outlined,
+            onPressed: () => openLink(context, b.invoice!.url),
+          ),
+        ],
       ]),
     );
   }
@@ -796,12 +956,26 @@ class _Details extends StatelessWidget {
 
 // ── Status history, newest first ─────────────────────────────────────────────
 class _Updates extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   const _Updates({required this.booking});
+
+  static String _label(BookingState s) => switch (s) {
+        BookingState.requested => 'Requested',
+        BookingState.confirmed => 'Confirmed',
+        BookingState.onTheWay => 'On the way',
+        BookingState.inService => 'Cleaning',
+        BookingState.rescheduleNeeded => 'New time needed',
+        BookingState.completed => 'Done',
+        BookingState.missed => 'Missed',
+        BookingState.cancelled => 'Cancelled',
+        BookingState.unableToServe => 'Couldn\'t take it',
+      };
 
   @override
   Widget build(BuildContext context) {
-    final events = [...booking.history]..sort((a, b) => b.at.compareTo(a.at));
+    // The server appends in order, so newest first is simply reversed (two
+    // updates can share a timestamp).
+    final events = booking.history.reversed.toList();
     if (events.isEmpty) return const SizedBox.shrink();
     return AppCard(
       radius: AppRadius.lg,
@@ -840,15 +1014,14 @@ class _Updates extends StatelessWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(events[i].status.label,
+                        Text(events[i].note ?? _label(events[i].status),
                             style: AppText.smallStrong.copyWith(
                                 color: i == 0
                                     ? AppColors.text
                                     : AppColors.textMuted)),
                         Text(
                             '${friendlyDate(events[i].at)}, '
-                            '${clockLabel(events[i].at.hour * 60 + events[i].at.minute)}'
-                            '${events[i].note == null ? '' : ' · ${events[i].note}'}',
+                            '${clockLabel(events[i].at.hour * 60 + events[i].at.minute)}',
                             style: AppText.caption),
                       ]),
                 ),
@@ -860,30 +1033,36 @@ class _Updates extends StatelessWidget {
   }
 }
 
-// ── Change time: a request with the day and window chosen ────────────────────
-class _ChangeTimeSheet extends StatefulWidget {
-  final List<DateTime> days;
-  final int minutes;
-  const _ChangeTimeSheet({required this.days, required this.minutes});
+// ── Change time: the server's open start times for the next days ──────────────
+class _ChangeTimeSheet extends ConsumerStatefulWidget {
+  final Booking booking;
+  const _ChangeTimeSheet({required this.booking});
 
   @override
-  State<_ChangeTimeSheet> createState() => _ChangeTimeSheetState();
+  ConsumerState<_ChangeTimeSheet> createState() => _ChangeTimeSheetState();
 }
 
-class _ChangeTimeSheetState extends State<_ChangeTimeSheet> {
-  late DateTime? _day = widget.days.firstOrNull;
-  TimeSlot? _slot;
+class _ChangeTimeSheetState extends ConsumerState<_ChangeTimeSheet> {
+  final _days = [
+    for (var i = 0; i < 7; i++) addDays(dateOnly(DateTime.now()), i),
+  ];
+  late DateTime _day = _days[1];
+  int? _start;
 
   @override
   Widget build(BuildContext context) {
-    final day = _day;
-    final slots = day == null
-        ? const <TimeSlot>[]
-        : timeSlots
-            .where((s) =>
-                s.isAvailable(day) &&
-                canFinishByClose(s.startMinute, widget.minutes))
-            .toList();
+    final b = widget.booking;
+    final extras =
+        (b.extras.map((e) => '${e.id}:${e.qty}').toList()..sort()).join(',');
+    final avail = ref.watch(availabilityProvider(
+        (b.service.id, b.car.type, extras, dateKey(_day))));
+    final open = [
+      for (final s in avail.valueOrNull?.openSlots ?? const <Slot>[])
+        if (!(dateOnly(s.date) == dateOnly(b.slot.date) &&
+            s.start == b.slot.start))
+          s,
+    ];
+    final policy = b.cancelPolicy;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -895,46 +1074,61 @@ class _ChangeTimeSheetState extends State<_ChangeTimeSheet> {
               Text('Change the time', style: AppText.h2),
               const SizedBox(height: 4),
               Text(
-                  'We\'ll check it and confirm in the app. Free until 4 hours '
-                  'before your slot.',
+                  'We\'ll check it and confirm on WhatsApp.'
+                  '${policy == null ? '' : ' Free until ${clockLabel(policy.feeAfter.hour * 60 + policy.feeAfter.minute)}, ${friendlyDate(policy.feeAfter)}.'}',
                   style: AppText.small),
               const SizedBox(height: AppSpace.lg),
-              Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
-                for (final d in widget.days)
-                  ChoiceChip(
-                    label: Text(friendlyDate(d)),
-                    selected: d == _day,
-                    showCheckmark: false,
-                    selectedColor: AppColors.ink,
-                    labelStyle: AppText.smallStrong.copyWith(
-                        color: d == _day ? Colors.white : AppColors.text),
-                    onSelected: (_) => setState(() {
-                      _day = d;
-                      _slot = null;
-                    }),
-                  ),
-              ]),
+              SizedBox(
+                height: 44,
+                child: ListView(scrollDirection: Axis.horizontal, children: [
+                  for (final d in _days) ...[
+                    ChoiceChip(
+                      label: Text(friendlyDate(d)),
+                      selected: d == _day,
+                      showCheckmark: false,
+                      selectedColor: AppColors.ink,
+                      labelStyle: AppText.smallStrong.copyWith(
+                          color: d == _day ? Colors.white : AppColors.text),
+                      onSelected: (_) => setState(() {
+                        _day = d;
+                        _start = null;
+                      }),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                  ],
+                ]),
+              ),
               const SizedBox(height: AppSpace.lg),
-              Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
-                for (final s in slots)
-                  ChoiceChip(
-                    label: Text(s.short),
-                    selected: s.id == _slot?.id,
-                    showCheckmark: false,
-                    selectedColor: AppColors.primary,
-                    labelStyle: AppText.smallStrong.copyWith(
-                        color:
-                            s.id == _slot?.id ? Colors.white : AppColors.text),
-                    onSelected: (_) => setState(() => _slot = s),
-                  ),
-              ]),
+              if (avail.isLoading && !avail.hasValue)
+                const Center(child: CircularProgressIndicator())
+              else if (open.isEmpty)
+                Text(
+                    avail.valueOrNull?.closedReason ??
+                        'No times open this day. Try another day.',
+                    style: AppText.small)
+              else
+                Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+                  for (final s in open)
+                    ChoiceChip(
+                      label: Text(clockLabel(s.start)),
+                      selected: s.start == _start,
+                      showCheckmark: false,
+                      selectedColor: AppColors.primary,
+                      labelStyle: AppText.smallStrong.copyWith(
+                          color: s.start == _start
+                              ? Colors.white
+                              : AppColors.text),
+                      onSelected: (_) => setState(() => _start = s.start),
+                    ),
+                ]),
               const SizedBox(height: AppSpace.xl),
               PrimaryButton(
-                label: 'Request this time',
-                onPressed: day == null || _slot == null
+                label: _start == null
+                    ? 'Request this time'
+                    : 'Request ${clockLabel(_start!)}',
+                onPressed: _start == null
                     ? null
-                    : () => Navigator.pop(context,
-                        'Change time to ${friendlyDate(day)}, ${_slot!.short}'),
+                    : () => Navigator.pop(context, SlotPick(_day, _start!)),
               ),
             ]),
       ),
@@ -944,7 +1138,8 @@ class _ChangeTimeSheetState extends State<_ChangeTimeSheet> {
 
 // ── Cancel: policy, optional reason, and a nudge to change the time ──────────
 class _CancelSheet extends StatefulWidget {
-  const _CancelSheet();
+  final Booking booking;
+  const _CancelSheet({required this.booking});
 
   /// Returned when the customer would rather move the booking.
   static const changeInstead = '__change__';
@@ -964,6 +1159,17 @@ class _CancelSheetState extends State<_CancelSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final b = widget.booking;
+    final policy = b.cancelPolicy;
+    final late = policy != null && !DateTime.now().isBefore(policy.feeAfter);
+    final text = b.status == BookingState.confirmed
+        ? (late
+            ? 'Your slot is less than 2 hours away, so ₹${policy.fee} is added '
+                'to your next booking. The team confirms the cancellation on '
+                'WhatsApp.'
+            : 'Free to cancel until 2 hours before your slot. The team '
+                'confirms the cancellation on WhatsApp.')
+        : 'Nothing is confirmed yet, so this cancels right away, free.';
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -974,11 +1180,10 @@ class _CancelSheetState extends State<_CancelSheet> {
             children: [
               Text('Cancel this booking?', style: AppText.h2),
               const SizedBox(height: AppSpace.md),
-              const NoticeBox(
+              NoticeBox(
                 icon: Icons.info_outline_rounded,
-                text: 'Free to cancel until 4 hours before your slot. '
-                    'Cancelling within 2 hours of your slot, or after the '
-                    'expert has left, adds ₹100 to your next booking.',
+                warning: late,
+                text: text,
               ),
               const SizedBox(height: AppSpace.lg),
               Text('Why are you cancelling? (optional)',
@@ -1004,17 +1209,15 @@ class _CancelSheetState extends State<_CancelSheet> {
               ),
               const SizedBox(height: AppSpace.sm),
               TextButton(
-                onPressed: () => Navigator.pop(
-                    context,
-                    _reason == null
-                        ? 'Cancel this booking'
-                        : 'Cancel this booking: $_reason'),
+                onPressed: () => Navigator.pop(context, _reason ?? ''),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.error,
                   minimumSize: const Size(0, 48),
                   textStyle: AppText.bodyStrong,
                 ),
-                child: const Text('Yes, request cancellation'),
+                child: Text(b.status == BookingState.confirmed
+                    ? 'Yes, request cancellation'
+                    : 'Yes, cancel'),
               ),
             ]),
       ),

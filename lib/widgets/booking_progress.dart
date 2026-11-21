@@ -1,9 +1,41 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
-import '../data/api/models.dart' show BookingState;
+import '../core/format.dart';
+import '../core/scheduling.dart' show clockLabel;
+import '../data/api/models.dart' show Booking, BookingState;
+import 'ui.dart' show PillTone;
 import '../models/booking.dart';
 
 const _steps = ['Requested', 'Confirmed', 'On the way', 'Cleaning', 'Done'];
+
+/// Status chip words and colour for a server booking (list, detail, Home).
+(String, PillTone) chipOf(BookingState s) => switch (s) {
+      BookingState.requested => ('Waiting for confirmation', PillTone.warning),
+      BookingState.confirmed => ('Confirmed', PillTone.brand),
+      BookingState.onTheWay => ('On the way', PillTone.brand),
+      BookingState.inService => ('Cleaning now', PillTone.brand),
+      BookingState.rescheduleNeeded => ('Pick a new time', PillTone.warning),
+      BookingState.completed => ('Done', PillTone.brand),
+      BookingState.missed => ('Missed', PillTone.neutral),
+      BookingState.cancelled => ('Cancelled', PillTone.neutral),
+      BookingState.unableToServe => ("Couldn't take it", PillTone.neutral),
+    };
+
+/// One line for where a server booking stands.
+String headlineOf(Booking b) => switch (b.status) {
+      BookingState.requested =>
+        'Requested for ${friendlyDate(b.slot.date)}, ${clockLabel(b.slot.start)}',
+      BookingState.confirmed => 'Expert arrives ${clockLabel(b.slot.start)}',
+      BookingState.onTheWay => 'Your expert is on the way',
+      BookingState.inService => 'Your car is being cleaned',
+      BookingState.rescheduleNeeded => b.offer != null
+          ? 'The team offered another time'
+          : 'Please pick a new time',
+      BookingState.completed => 'All done. Hope you love it!',
+      BookingState.missed => "Our expert couldn't reach you",
+      BookingState.cancelled => 'Booking cancelled',
+      BookingState.unableToServe => "We couldn't take this booking",
+    };
 
 /// The stepper's status for a server booking (contract statuses).
 BookingStatus progressStatusOf(BookingState s) => switch (s) {

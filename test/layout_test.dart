@@ -55,12 +55,9 @@ Future<void> pumpAt(WidgetTester tester, Widget screen,
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
-  const ref = 'CC-7K4Q2X9M';
   // name -> (screen, saved data it starts with)
   final screens = <String, (Widget, Map<String, Object>)>{
     'Home': (const HomeScreen(), const {}),
-    'Home (booked)': (const HomeScreen(), bookingPrefs()),
-    'Home (book again)': (const HomeScreen(), repeatPrefs()),
     'Services': (const ServicesScreen(), const {}),
     'Services (detailing)': (
       const ServicesScreen(initialCategory: ServiceCategory.detailing),
@@ -70,18 +67,6 @@ void main() {
         (const ServiceDetailScreen(serviceId: 'monthly-3'), const {}),
     'Service detail (full detailing)':
         (const ServiceDetailScreen(serviceId: 'full-package'), const {}),
-    'Bookings (empty)': (const BookingsScreen(), const {}),
-    'Bookings (upcoming)': (const BookingsScreen(), bookingPrefs()),
-    'Booking detail (waiting)': (
-      const BookingDetailScreen(bookingRef: ref),
-      bookingPrefs(confirmed: false)
-    ),
-    'Booking detail (confirmed)':
-        (const BookingDetailScreen(bookingRef: ref), bookingPrefs()),
-    'Booking detail (new time offered)':
-        (const BookingDetailScreen(bookingRef: ref), holdPrefs()),
-    'Booking detail (done)':
-        (const BookingDetailScreen(bookingRef: ref), repeatPrefs()),
     'Profile': (const ProfileScreen(), profile),
     'Offers': (const WalletScreen(), profile),
     'My addresses': (const AddressesScreen(), bookingPrefs()),
@@ -161,6 +146,48 @@ void main() {
         await pumpAt(tester, screen,
             textScale: scale, saved: profile, overrides: fakeOverrides(fixtureApi()));
         if (interact != null) await interact(tester);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    // Bookings, detail and Home on the test-build server, in every state.
+    for (final state in Fx.values) {
+      testWidgets('Booking detail (${state.name}) has no overflow at text scale $scale',
+          (tester) async {
+        final api = fixtureApi();
+        await pumpAt(
+            tester,
+            AfterBooking(
+                api: api,
+                state: state,
+                then: (ref) => BookingDetailScreen(bookingRef: ref)),
+            textScale: scale,
+            saved: profile,
+            overrides: fakeOverrides(api));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('Booking not found'), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+    for (final (name, state) in [
+      ('Bookings (empty)', null),
+      ('Bookings (upcoming)', Fx.confirmed),
+      ('Bookings (past)', Fx.completed),
+      ('Home (booked)', Fx.confirmed),
+      ('Home (book again)', Fx.completed),
+    ]) {
+      testWidgets('$name has no overflow at text scale $scale', (tester) async {
+        final api = fixtureApi();
+        if (state != null) await fixtureBooking(api, state);
+        final screen = name.startsWith('Home') ? const HomeScreen() : const BookingsScreen();
+        await pumpAt(tester, screen,
+            textScale: scale, saved: profile, overrides: fakeOverrides(api));
+        await tester.pump(const Duration(milliseconds: 300));
+        if (name == 'Bookings (past)') {
+          await tester.tap(find.textContaining('Past'));
+          await tester.pump(const Duration(milliseconds: 300));
+        }
         expect(tester.takeException(), isNull);
       });
     }

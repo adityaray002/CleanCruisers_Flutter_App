@@ -129,3 +129,83 @@ class _AfterRequestState extends State<AfterRequest> {
         builder: (_, s) => s.hasData ? widget.then(s.data!) : const SizedBox(),
       );
 }
+
+/// Booking states the screens are checked in (built with the admin actions).
+enum Fx {
+  requested,
+  confirmed,
+  onTheWay,
+  inService,
+  offered,
+  rain,
+  carSize,
+  cancelAsked,
+  completed,
+  missed,
+  cancelled,
+}
+
+/// Sends the fixture request and moves it to [state]; returns its reference.
+Future<String> fixtureBooking(FakeApi api, Fx state) async {
+  final ref = await fixtureRequest(api);
+  final next = SlotPick(addDays(dateOnly(DateTime.now()), 2), 10 * 60);
+  void confirm() => api.adminConfirm(ref);
+  switch (state) {
+    case Fx.requested:
+      break;
+    case Fx.confirmed:
+      confirm();
+    case Fx.onTheWay:
+      confirm();
+      api.adminOnTheWay(ref);
+    case Fx.inService:
+      confirm();
+      api.adminOnTheWay(ref);
+      api.adminStart(ref);
+    case Fx.offered:
+      api.adminOfferTime(ref, next);
+    case Fx.rain:
+      confirm();
+      api.adminRain(ref, next);
+    case Fx.carSize:
+      confirm();
+      api.adminOnTheWay(ref);
+      api.adminCarSize(ref, CarType.suv);
+    case Fx.cancelAsked:
+      confirm();
+      await api.cancel(ref, reason: 'Plans changed');
+    case Fx.completed:
+      confirm();
+      api.adminOnTheWay(ref);
+      api.adminStart(ref);
+      api.adminComplete(ref, method: 'upi');
+    case Fx.missed:
+      confirm();
+      api.adminMissed(ref);
+    case Fx.cancelled:
+      await api.cancel(ref, reason: 'Plans changed');
+  }
+  return ref;
+}
+
+/// Shows [then] once [fixtureBooking] has put a booking in [state].
+class AfterBooking extends StatefulWidget {
+  final FakeApi api;
+  final Fx state;
+  final Widget Function(String ref) then;
+  const AfterBooking(
+      {super.key, required this.api, required this.state, required this.then});
+
+  @override
+  State<AfterBooking> createState() => _AfterBookingState();
+}
+
+class _AfterBookingState extends State<AfterBooking> {
+  late final Future<String> _ref = fixtureBooking(widget.api, widget.state);
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+        future: _ref,
+        builder: (_, s) => s.hasData ? widget.then(s.data!) : const SizedBox(),
+      );
+}

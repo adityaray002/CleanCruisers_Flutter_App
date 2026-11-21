@@ -1,3 +1,6 @@
+import '../core/scheduling.dart' show clockLabel;
+import '../data/api/models.dart' show Booking, BookingState;
+import '../providers/booking_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +11,6 @@ import '../core/scheduling.dart' show Coverage;
 import '../core/theme.dart';
 import '../data/business_info.dart';
 import '../data/offers.dart';
-import '../models/booking.dart';
 import '../models/service.dart';
 import '../widgets/booking_progress.dart';
 import '../widgets/brand_header.dart';
@@ -38,16 +40,16 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bookings = ref.watch(myBookingsProvider);
+    final mine = ref.watch(myApiBookingsProvider).valueOrNull ?? MyBookings.none;
     final car = ref.watch(profileProvider).car;
-    final live = bookings.where((b) => !b.status.isFinal).firstOrNull;
-    final isNew = bookings.isEmpty;
-    final lastDone = (bookings
-            .where((b) =>
-                b.status == BookingStatus.completed &&
-                serviceById(b.serviceId) != null)
-            .toList()
-          ..sort((a, b) => b.date.compareTo(a.date)))
+    final live = mine.upcoming.firstOrNull;
+    final isNew = mine.isEmpty;
+    // Past comes newest first from the server.
+    final lastDone = mine.past
+        .where((b) =>
+            b.status == BookingState.completed &&
+            b.plan == null &&
+            serviceById(b.service.id) != null)
         .firstOrNull;
     final firstOffer = isNew
         ? kOffers
@@ -329,24 +331,25 @@ class _HeroPill extends StatelessWidget {
 /// The last finished wash, one tap from booking again. The price is today's
 /// price for that car, not what was paid last time.
 class _BookAgain extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   const _BookAgain({required this.booking});
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final s = serviceById(b.serviceId)!;
-    final price = '${rupees(s.priceFor(b.car))}${s.priceSuffix}';
+    final s = serviceById(b.service.id)!;
+    final car = b.car.type;
+    final price = '${rupees(s.priceFor(car))}${s.priceSuffix}';
     final photo = s.cardPhoto;
     void book() {
       HapticFeedback.selectionClick();
-      context.push('/book/${s.id}?car=${b.car.name}');
+      context.push('/book/${s.id}?car=${car.name}');
     }
 
     return Semantics(
       button: true,
-      label: 'Book ${s.name} again for your ${carTypeNames[b.car]}. '
-          'Last done ${friendlyDate(b.date)}. $price',
+      label: 'Book ${s.name} again for your ${carTypeNames[car]}. '
+          'Last done ${friendlyDate(b.slot.date)}. $price',
       child: ExcludeSemantics(
         child: AppCard(
           onTap: book,
@@ -381,7 +384,7 @@ class _BookAgain extends StatelessWidget {
                         style: AppText.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
-                    Text('Last done ${friendlyDate(b.date)} · $price',
+                    Text('Last done ${friendlyDate(b.slot.date)} · $price',
                         style: AppText.small),
                   ]),
             ),
@@ -831,7 +834,7 @@ class _EcoBanner extends StatelessWidget {
 /// Dark status card: when the expert arrives (the slot is the promise, the
 /// planned arrival a hint), and five progress dots.
 class _LiveBookingCard extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   const _LiveBookingCard({required this.booking});
 
   static const _muted = Color(0xFFB8C0C7);
@@ -839,22 +842,23 @@ class _LiveBookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final slot = slotById(b.slotId);
-    final arrival = b.confirmedArrivalLabel;
-    final service = serviceById(b.serviceId);
-    final carLabel =
-        b.carModel.trim().isEmpty ? carTypeNames[b.car]! : b.carModel.trim();
+    final service = serviceById(b.service.id);
+    final carLabel = b.car.model.trim().isEmpty
+        ? carTypeNames[b.car.type]!
+        : b.car.model.trim();
     final line = [
-      if (arrival != null) 'Likely around $arrival',
-      service?.listName ?? b.serviceName,
+      if (b.status != BookingState.requested)
+        'Ready by about ${clockLabel(b.slot.end)}',
+      service?.listName ?? b.service.name,
       carLabel,
     ].join(' · ');
-    final step = progressIndex(b.status);
+    final step = progressIndex(progressStatusOf(b.status));
+    final (chip, _) = chipOf(b.status);
 
     return Semantics(
       button: true,
-      label: '${b.status.label}, ${friendlyDate(b.date)}. '
-          '${progressHeadline(b)}. $line. Open booking',
+      label: '$chip, ${friendlyDate(b.slot.date)}. '
+          '${headlineOf(b)}. $line. Open booking',
       child: ExcludeSemantics(
         child: Material(
           color: AppColors.ink,
@@ -877,7 +881,7 @@ class _LiveBookingCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                            '${b.status.label} · ${friendlyDate(b.date)}'
+                            '$chip · ${friendlyDate(b.slot.date)}'
                                 .toUpperCase(),
                             style: AppText.overline
                                 .copyWith(color: AppColors.brand)),
@@ -888,10 +892,10 @@ class _LiveBookingCard extends StatelessWidget {
                           size: 18, color: _muted),
                     ]),
                     const SizedBox(height: AppSpace.sm),
-                    Text(progressHeadline(b),
+                    Text(headlineOf(b),
                         style: AppText.h3.copyWith(color: Colors.white)),
                     const SizedBox(height: 2),
-                    Text(line.isEmpty ? (slot?.short ?? b.slotLabel) : line,
+                    Text(line,
                         style: AppText.small.copyWith(color: _muted),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),

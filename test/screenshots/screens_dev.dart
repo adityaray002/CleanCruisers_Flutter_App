@@ -18,6 +18,7 @@ import 'package:cleancruisers_app/screens/home_screen.dart';
 import 'package:cleancruisers_app/screens/profile_screen.dart';
 import 'package:cleancruisers_app/screens/service_detail_screen.dart';
 import 'package:cleancruisers_app/screens/services_screen.dart';
+import 'package:cleancruisers_app/screens/test_tools_screen.dart';
 import 'package:cleancruisers_app/screens/wallet_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,9 +74,17 @@ void main() {
   both('login_test', const LoginScreen(), 800, overrides: testBuild);
   both('otp_test', const OtpScreen(session: OtpSession(phone: '9876543210')), 800,
       overrides: testBuild);
-  both('home', const HomeScreen(), 2600, prefs: bookingPrefs());
+  /// [screen] once the fixture customer has a booking in [state].
+  void withBooking(String name, Fx state, Widget Function(String ref) screen, double full,
+      {Future<void> Function(WidgetTester)? interact}) {
+    final api = fixtureApi();
+    both(name, AfterBooking(api: api, state: state, then: screen), full,
+        prefs: profile, overrides: fakeOverrides(api), interact: interact);
+  }
+
+  withBooking('home', Fx.confirmed, (_) => const HomeScreen(), 2600);
   both('home_new', const HomeScreen(), 2400);
-  both('home_repeat', const HomeScreen(), 2400, prefs: repeatPrefs());
+  withBooking('home_repeat', Fx.completed, (_) => const HomeScreen(), 2400);
   both('services', const ServicesScreen(), 1600, prefs: profile);
   both('services_detailing',
       const ServicesScreen(initialCategory: ServiceCategory.detailing), 2000,
@@ -116,24 +125,32 @@ void main() {
       1000,
       prefs: profile,
       overrides: fakeOverrides(sentApi));
-  both('bookings', const BookingsScreen(), 800, prefs: bookingPrefs());
-  both('bookings_past', const BookingsScreen(), 800, prefs: repeatPrefs(),
+  withBooking('bookings', Fx.confirmed, (_) => const BookingsScreen(), 800);
+  withBooking('bookings_past', Fx.completed, (_) => const BookingsScreen(), 800,
       interact: (t) async {
     await t.tap(find.textContaining('Past'));
     await t.pump(const Duration(milliseconds: 300));
   });
-  both('bookings_empty', const BookingsScreen(), 800, prefs: profile);
-  both('detail', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
-      prefs: bookingPrefs());
-  both('detail_waiting', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'),
-      1700,
-      prefs: bookingPrefs(confirmed: false));
-  both(
-      'detail_done', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
-      prefs: repeatPrefs());
-  both(
-      'detail_hold', const BookingDetailScreen(bookingRef: 'CC-7K4Q2X9M'), 1700,
-      prefs: holdPrefs());
+  both('bookings_empty', const BookingsScreen(), 800,
+      prefs: profile, overrides: fakeOverrides(fixtureApi()));
+  for (final (name, state) in [
+    ('detail', Fx.confirmed),
+    ('detail_waiting', Fx.requested),
+    ('detail_done', Fx.completed),
+    ('detail_hold', Fx.rain),
+    ('detail_offer', Fx.offered),
+    ('detail_car', Fx.carSize),
+    ('detail_cancel_asked', Fx.cancelAsked),
+    ('detail_missed', Fx.missed),
+  ]) {
+    withBooking(name, state, (ref) => BookingDetailScreen(bookingRef: ref), 1900);
+  }
+  final toolsApi = fixtureApi();
+  both('test_tools',
+      AfterBooking(api: toolsApi, state: Fx.confirmed, then: (_) => const TestToolsScreen()),
+      1400,
+      prefs: profile,
+      overrides: fakeOverrides(toolsApi));
   both('profile', const ProfileScreen(), 2000, prefs: profile);
   both('addresses', const AddressesScreen(), 1000, prefs: bookingPrefs());
   both('address_sheet', const HomeScreen(), 800, prefs: profile,

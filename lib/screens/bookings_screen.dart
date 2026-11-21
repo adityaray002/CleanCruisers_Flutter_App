@@ -4,18 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
 import '../core/pricing.dart';
+import '../core/scheduling.dart' show clockLabel;
 import '../core/theme.dart';
+import '../data/api/models.dart';
 import '../data/business_info.dart';
-import '../models/booking.dart';
 import '../models/service.dart';
-import '../providers/app_providers.dart';
+import '../providers/booking_providers.dart';
 import '../widgets/booking_progress.dart';
 import '../widgets/ui.dart';
 
-/// My bookings (v3 design): Upcoming and Past tabs. Upcoming shows one card
-/// per booking with its status, when the expert comes and progress dots;
-/// Past is a list with "Book again" on finished washes. Each tab has its own
-/// empty state.
+/// My bookings (v3 design): Upcoming and Past tabs, from the server
+/// (refreshed every 30 s and on pull). Upcoming shows one card per booking
+/// with its status, when the expert comes and progress dots; Past is a list
+/// with "Book again" on finished washes. Each tab has its own empty state.
 class BookingsScreen extends ConsumerStatefulWidget {
   const BookingsScreen({super.key});
 
@@ -28,14 +29,9 @@ class _BookingsScreenState extends ConsumerState<BookingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(myBookingsProvider);
-    final upcoming = all
-        .where((b) => b.isUpcoming() && !b.status.isFinal)
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-    final past = all.where((b) => !b.isUpcoming() || b.status.isFinal).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final list = _past ? past : upcoming;
+    final async = ref.watch(myApiBookingsProvider);
+    final mine = async.valueOrNull ?? MyBookings.none;
+    final list = _past ? mine.past : mine.upcoming;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark
@@ -47,8 +43,7 @@ class _BookingsScreenState extends ConsumerState<BookingsScreen> {
           child: SafeArea(
             bottom: false,
             child: RefreshIndicator(
-              onRefresh: () async =>
-                  ref.invalidate(customerCloudBookingsProvider),
+              onRefresh: () => ref.refresh(myApiBookingsProvider.future),
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
                     AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.xxl),
@@ -60,16 +55,28 @@ class _BookingsScreenState extends ConsumerState<BookingsScreen> {
                   const SizedBox(height: AppSpace.lg),
                   _Tabs(
                     past: _past,
-                    upcomingCount: upcoming.length,
-                    pastCount: past.length,
+                    upcomingCount: mine.upcoming.length,
+                    pastCount: mine.past.length,
                     onChanged: (v) {
                       HapticFeedback.selectionClick();
                       setState(() => _past = v);
                     },
                   ),
                   const SizedBox(height: AppSpace.lg),
-                  if (list.isEmpty)
-                    _Empty(past: _past, firstBooking: all.isEmpty)
+                  if (async.isLoading && !async.hasValue)
+                    const Padding(
+                      padding: EdgeInsets.all(AppSpace.section),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (async.hasError && !async.hasValue)
+                    const NoticeBox(
+                      icon: Icons.wifi_off_rounded,
+                      warning: true,
+                      text: 'Couldn\'t load your bookings. Pull down to try '
+                          'again.',
+                    )
+                  else if (list.isEmpty)
+                    _Empty(past: _past)
                   else if (!_past)
                     for (final b in list) ...[
                       _UpcomingCard(booking: b),
@@ -160,40 +167,38 @@ class _Tabs extends StatelessWidget {
   }
 }
 
-/// Status chip colours and words, shared by the list and the detail page.
-(String, PillTone) statusChip(BookingRecord b) => switch (b.status) {
-      BookingStatus.requested => ('Waiting for confirmation', PillTone.warning),
-      BookingStatus.teamReview => ('Team checking', PillTone.warning),
-      BookingStatus.confirmed => ('Confirmed', PillTone.brand),
-      BookingStatus.onTheWay => ('On the way', PillTone.brand),
-      BookingStatus.inService => ('Cleaning now', PillTone.brand),
-      BookingStatus.rescheduleNeeded => ('Pick a new time', PillTone.warning),
-      BookingStatus.completed => ('Done', PillTone.brand),
-      BookingStatus.cancelled => ('Cancelled', PillTone.neutral),
-      BookingStatus.unableToServe => ('Couldn\'t take it', PillTone.neutral),
-    };
+String _carOf(Booking b) =>
+    b.car.model.trim().isEmpty ? carTypeNames[b.car.type]! : b.car.model.trim();
+
+String _serviceName(Booking b) =>
+    serviceById(b.service.id)?.listName ?? b.service.name;
 
 class _UpcomingCard extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   const _UpcomingCard({required this.booking});
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final (chip, tone) = statusChip(b);
-    final service = serviceById(b.serviceId);
-    final arrival = b.confirmedArrivalLabel;
+    final (chip, tone) = chipOf(b.status);
     final line = [
-      if (arrival != null) 'Likely around $arrival',
-      service?.listName ?? b.serviceName,
-      b.carModel.trim().isEmpty ? carTypeNames[b.car]! : b.carModel.trim(),
+      if (b.status != BookingState.requested)
+        'Ready by about ${clockLabel(b.slot.end)}',
+      _serviceName(b),
+      _carOf(b),
     ].join(' · ');
-    final waiting = b.status == BookingStatus.requested ||
-        b.status == BookingStatus.teamReview;
+    final waiting = b.status == BookingState.requested;
+    final step = progressIndex(progressStatusOf(b.status));
+    final request = switch (b.openRequest?.kind) {
+      'cancel' => 'Cancellation requested. We\'ll confirm on WhatsApp.',
+      'changeTime' => 'New time requested. We\'ll confirm on WhatsApp.',
+      'keepAsPlanned' => 'You asked to keep the wash. We\'ll confirm.',
+      _ => null,
+    };
 
     return Semantics(
       button: true,
-      label: '$chip, ${friendlyDate(b.date)}. ${progressHeadline(b)}. $line. '
+      label: '$chip, ${friendlyDate(b.slot.date)}. ${headlineOf(b)}. $line. '
           'Open booking',
       child: ExcludeSemantics(
         child: AppCard(
@@ -209,10 +214,10 @@ class _UpcomingCard extends StatelessWidget {
                     child: Pill(chip, tone: tone)),
               ),
               const SizedBox(width: AppSpace.sm),
-              Text(friendlyDate(b.date), style: AppText.caption),
+              Text(friendlyDate(b.slot.date), style: AppText.caption),
             ]),
             const SizedBox(height: AppSpace.sm),
-            Text(progressHeadline(b), style: AppText.h3),
+            Text(headlineOf(b), style: AppText.h3),
             const SizedBox(height: 2),
             Text(line, style: AppText.small),
             if (waiting) ...[
@@ -224,25 +229,26 @@ class _UpcomingCard extends StatelessWidget {
                   color: AppColors.bg,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: Text(
-                    'We usually confirm within $kConfirmUsually. '
-                    'You\'ll see it here.',
-                    style: AppText.caption),
+                child: Text(b.statusNote, style: AppText.caption),
               ),
-            ] else if (progressIndex(b.status) != null) ...[
+            ] else if (step != null) ...[
               const SizedBox(height: AppSpace.md),
-              BookingProgress(status: b.status, showLabels: false),
+              BookingProgress(status: progressStatusOf(b.status), showLabels: false),
             ],
-            if (b.customerChangeRequest != null) ...[
+            if (b.pendingChange != null) ...[
               const SizedBox(height: AppSpace.md),
-              Text('Change requested. We\'ll confirm in the app.',
+              Text('Please check a change from the expert.',
+                  style: AppText.caption.copyWith(color: AppColors.warning)),
+            ] else if (request != null) ...[
+              const SizedBox(height: AppSpace.md),
+              Text(request,
                   style: AppText.caption.copyWith(color: AppColors.warning)),
             ],
             const Divider(height: AppSpace.xl),
             Row(children: [
               Expanded(
                 child: Text(
-                    '${rupees(b.payable)}${kPayAfterService ? ' · pay after' : ''}',
+                    '${rupees(b.bill.total)}${kPayAfterService ? ' · pay after' : ''}',
                     style: AppText.small),
               ),
               Text('View details',
@@ -259,28 +265,29 @@ class _UpcomingCard extends StatelessWidget {
 }
 
 class _PastRow extends StatelessWidget {
-  final BookingRecord booking;
+  final Booking booking;
   const _PastRow({required this.booking});
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final service = serviceById(b.serviceId);
+    final service = serviceById(b.service.id);
     final photo = service?.cardPhoto;
-    final done = b.status == BookingStatus.completed;
-    final (chip, _) = statusChip(b);
-    final status = done ? 'Done · paid' : chip;
+    final done = b.status == BookingState.completed;
+    final (chip, _) = chipOf(b.status);
+    final paid = b.payment.status == 'paid';
+    final status = done ? (paid ? 'Done · paid' : 'Done') : chip;
     final meta = [
-      friendlyDate(b.date),
-      b.carModel.trim().isEmpty ? carTypeNames[b.car]! : b.carModel.trim(),
-      if (done) rupees(b.amountCollected ?? b.payable),
+      friendlyDate(b.slot.date),
+      _carOf(b),
+      if (done) rupees(b.bill.total),
     ].join(' · ');
 
     return Row(children: [
       Expanded(
         child: Semantics(
           button: true,
-          label: '${service?.listName ?? b.serviceName}. $meta. $status. Open',
+          label: '${_serviceName(b)}. $meta. $status. Open',
           child: ExcludeSemantics(
             child: InkWell(
               onTap: () => context.push('/bookings/${b.ref}'),
@@ -310,7 +317,7 @@ class _PastRow extends StatelessWidget {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(service?.listName ?? b.serviceName,
+                          Text(_serviceName(b),
                               style: AppText.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
@@ -329,13 +336,13 @@ class _PastRow extends StatelessWidget {
           ),
         ),
       ),
-      if (done && service != null)
+      if (done && service != null && b.plan == null)
         Padding(
           padding: const EdgeInsets.only(right: AppSpace.md),
           child: OutlinedButton(
             onPressed: () {
               HapticFeedback.selectionClick();
-              context.push('/book/${service.id}?car=${b.car.name}');
+              context.push('/book/${service.id}?car=${b.car.type.name}');
             },
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(0, 44),
@@ -353,8 +360,8 @@ class _PastRow extends StatelessWidget {
 }
 
 class _Empty extends StatelessWidget {
-  final bool past, firstBooking;
-  const _Empty({required this.past, required this.firstBooking});
+  final bool past;
+  const _Empty({required this.past});
 
   @override
   Widget build(BuildContext context) {

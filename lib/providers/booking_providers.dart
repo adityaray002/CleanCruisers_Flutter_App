@@ -3,8 +3,10 @@
 // The draft only holds the customer's choices. Slots, the bill, coupons,
 // credit and the "slot taken" answer all come from the server.
 
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/pricing.dart';
@@ -186,7 +188,72 @@ final quoteProvider = FutureProvider.autoDispose.family<Quote, String>((ref, jso
 
 String quoteKey(BookingRequest r) => jsonEncode(r.toJson());
 
-/// One booking from the server (contract `GET /bookings/{ref}`).
+/// How often an open bookings screen asks the server again (contract §5).
+const kBookingsRefresh = Duration(seconds: 30);
+
+/// One booking from the server (contract `GET /bookings/{ref}`). Screens
+/// that show it wrap themselves in [AutoRefresh].
 final apiBookingProvider =
     FutureProvider.autoDispose.family<Booking, String>((ref, bookingRef) =>
         ref.watch(apiProvider).booking(bookingRef));
+
+class MyBookings {
+  final List<Booking> upcoming, past;
+  const MyBookings(this.upcoming, this.past);
+  static const none = MyBookings([], []);
+  bool get isEmpty => upcoming.isEmpty && past.isEmpty;
+}
+
+/// The signed-in customer's bookings (contract `GET /bookings`). Logged
+/// out, or a build without a server: none. The shell refreshes it every
+/// [kBookingsRefresh] (see [AutoRefresh]).
+final myApiBookingsProvider = FutureProvider.autoDispose<MyBookings>((ref) async {
+  if (!ref.watch(authServiceProvider).signedIn) return MyBookings.none;
+  final api = ref.watch(apiProvider);
+  try {
+    return MyBookings(
+        await api.bookings(upcoming: true), await api.bookings(upcoming: false));
+  } on ApiException catch (e) {
+    if (e.code == ApiCode.authRequired) return MyBookings.none;
+    rethrow;
+  }
+});
+
+/// Asks the server again every [kBookingsRefresh] while [child] is on
+/// screen (the timer stops with the screen). [onTick] says what to reload.
+class AutoRefresh extends ConsumerStatefulWidget {
+  final void Function(WidgetRef ref) onTick;
+  final Widget child;
+  const AutoRefresh({super.key, required this.onTick, required this.child});
+
+  @override
+  ConsumerState<AutoRefresh> createState() => _AutoRefreshState();
+}
+
+class _AutoRefreshState extends ConsumerState<AutoRefresh> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(kBookingsRefresh, (_) {
+      if (mounted) widget.onTick(ref);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// After any change to [bookingRef]: show the new state everywhere.
+void refreshBooking(WidgetRef ref, String bookingRef) {
+  ref.invalidate(apiBookingProvider(bookingRef));
+  ref.invalidate(myApiBookingsProvider);
+  ref.invalidate(meProvider);
+}

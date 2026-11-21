@@ -154,7 +154,17 @@ class ProfileScreen extends ConsumerWidget {
                     textAlign: TextAlign.center,
                     style: AppText.caption),
               ),
-              if (ref.watch(authServiceProvider).isTestBuild)
+              if (ref.watch(authServiceProvider).isTestBuild) ...[
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => context.push('/test-tools'),
+                    icon: const Icon(Icons.build_outlined, size: 18),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        minimumSize: const Size(0, 44)),
+                    label: const Text('Test tools: act as the admin'),
+                  ),
+                ),
                 Center(
                   child: TextButton.icon(
                     onPressed: () => _resetTestData(context, ref),
@@ -164,8 +174,8 @@ class ProfileScreen extends ConsumerWidget {
                         minimumSize: const Size(0, 44)),
                     label: const Text('Test build: reset test data'),
                   ),
-                )
-              else
+                ),
+              ] else
                 Center(
                   child: TextButton(
                     onPressed: () => context.push('/ops/login'),

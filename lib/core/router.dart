@@ -22,6 +22,7 @@ import '../screens/profile_screen.dart';
 import '../screens/service_detail_screen.dart';
 import '../screens/services_screen.dart';
 import '../screens/splash_screen.dart';
+import '../screens/test_tools_screen.dart';
 import '../screens/wallet_screen.dart';
 import '../widgets/ui.dart';
 import 'pricing.dart';
@@ -112,6 +113,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: '/login/address', builder: (_, __) => const AddressScreen()),
       GoRoute(path: '/ops/login', builder: (_, __) => const OpsLoginScreen()),
       GoRoute(path: '/ops', builder: (_, __) => const OpsDashboardScreen()),
+      if (kFakeServer)
+        GoRoute(path: '/test-tools', builder: (_, __) => const TestToolsScreen()),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),
         routes: [
