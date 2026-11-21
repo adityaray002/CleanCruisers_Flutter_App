@@ -192,16 +192,7 @@ class ProfileScreen extends ConsumerWidget {
                     label: const Text('Test build: reset test data'),
                   ),
                 ),
-              ] else
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.push('/ops/login'),
-                    style: TextButton.styleFrom(
-                        foregroundColor: AppColors.textSubtle,
-                        minimumSize: const Size(0, 44)),
-                    child: const Text('Team sign in'),
-                  ),
-                ),
+              ],
             ],
           ),
         ),
@@ -323,7 +314,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   }
 
   bool get _phoneOk =>
-      _phone.text.isEmpty || BookingDraft.phoneRe.hasMatch(_phone.text);
+      _phone.text.isEmpty || kPhoneRe.hasMatch(_phone.text);
 
   @override
   Widget build(BuildContext context) {

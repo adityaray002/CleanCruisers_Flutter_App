@@ -14,7 +14,7 @@ Rules for turning Figma designs into code in this repo. Read this before impleme
 | State | `flutter_riverpod` 2.x (`Provider`, `StateNotifierProvider`, `StreamProvider`) in `lib/providers/app_providers.dart` |
 | Navigation | `go_router` 14 in `lib/core/router.dart`. Tabs live in a `ShellRoute` (`MainShell`); everything else is a pushed route |
 | Fonts | `google_fonts`, **Manrope**, bundled in `assets/google_fonts/` (runtime fetching is off) |
-| Backend | Firebase Auth (phone OTP for customers, email for staff) + Cloud Firestore (`lib/data/booking_cloud.dart`) |
+| Backend | **ShineStaff** (the owner's booking and worker system) through the API in `docs/API_CONTRACT.md` (`lib/data/api/`). Firebase Auth is used only for the customer's phone OTP (`lib/data/auth_service.dart`). Test builds run an in-app fake server instead (see section 9) |
 | Build | Flutter tooling only (no web bundler or CSS pipeline). `flutter build web --release` / Android / iOS |
 | Styling | Plain Flutter widgets + `ThemeData`. No CSS, no styled-components, no Tailwind |
 
@@ -111,17 +111,16 @@ Shared widgets live in `lib/widgets/`. Screen-private widgets are `_Private` cla
 | File | Widgets |
 |---|---|
 | `lib/widgets/service_widgets.dart` | `ServiceImage` (photo or branded tile), `ServiceCard` (home carousel card), `ServiceRow` (list row, exact price if `car:` given), `BrandMark`, `CornerBrandMark` |
-| `lib/widgets/booking_progress.dart` | `BookingProgress(status:, showLabels)` stepper; `progressIndex()`, `progressHeadline()` |
+| `lib/widgets/booking_progress.dart` | `BookingProgress(status:, showLabels)` stepper; `progressIndex()`, `headlineOf(Booking)`, `chipOf(BookingState)` → `(label, PillTone)`, the one place booking status words come from |
 | `lib/widgets/how_it_works.dart` | `HowItWorksSteps` |
 | `lib/widgets/motion.dart` | `Reveal` (fade/slide in on scroll), `KenBurns` (slow photo zoom), `PressScale` (tap shrink), `ConfettiBurst` |
 | `lib/widgets/contact_actions.dart` | `openWhatsApp()` (general support only, never booking data), `openLink()`. No phone-call buttons anywhere in the app |
-| `lib/widgets/customer_sheets.dart` | `AddressForm`, `showAddressSheet()` ("Where's your car?": current location, saved addresses as radio cards, blocks not-covered ones, links to `/addresses`), `showAddressForm(existing?)`, `showCarSheet()`, `addressCoverage()`, `CoverageChip` |
-| `lib/widgets/offer_card.dart` | `OfferCard` (coupon ticket). Offers themselves live in `lib/data/offers.dart` |
+| `lib/widgets/customer_sheets.dart` | `AddressForm`, `showAddressSheet()` ("Where's your car?": current location, saved addresses as radio cards, blocks not-covered ones, links to `/addresses`), `showAddressForm(existing?)`, `showCarSheet()`, `addressCoverage(ref, address)` (server coverage, area-name fallback), `CoverageChip` |
+| `lib/widgets/offer_card.dart` | `OfferCard.public` (coupon ticket) for an offer from the server (`publicOffersProvider`) |
 | `lib/widgets/book_button.dart` | `BookButton(service, primary)` ("Book now"; filled when `primary`, otherwise outlined) |
 | `lib/widgets/brand_header.dart` | `BrandWithAddress` (logo + wordmark + where the car is), `ParkedAtLine(withOverline)` ("Home · address ⌄", opens the address sheet), `CarPill` (car size, opens the car sheet), `RoundSurface` (bordered pill/circle for header controls) |
 | `lib/widgets/trust_widgets.dart` | `WhyUsStrip(tinted)` (facts from `business_info.dart` only; `tinted` = mint background), `HelpCard(title, line, message)` (WhatsApp support) |
 | `lib/screens/auth/login_screen.dart` | `CarTypePicker` (radio list: size, example models, optional price), reused by sign-up and the car sheet |
-| `lib/screens/bookings_screen.dart` | `statusChip(BookingRecord)` → `(label, PillTone)`, the one place booking status words come from |
 | `lib/screens/addresses_screen.dart` | `AddressesScreen` (`/addresses`); `AddressesScreen.bookingUsing()` blocks deleting an address an upcoming booking uses |
 
 ### Patterns to follow
@@ -150,16 +149,18 @@ Scaffold(
 );
 ```
 
-- Every tappable custom widget gets `Semantics(button: true, label: …)`; text fields use the `_labelled()` helper pattern in `booking_steps.dart`.
-- Selected state = `AppColors.primary` border/fill + `primarySoft` tint (see `CarTypePicker`, `_SlotChip`). Chips that pick one of a few (day, address label, need) are dark (`ink`) when selected.
+- Every tappable custom widget gets `Semantics(button: true, label: …)`; text fields get a `Semantics(label:, textField: true)` with the visible label.
+- Selected state = `AppColors.primary` border/fill + `primarySoft` tint (see `CarTypePicker`, `_TimeChip`). Chips that pick one of a few (day, address label, need) are dark (`ink`) when selected.
 - Light haptics on selection: `HapticFeedback.selectionClick()`.
 
 ### Business truths the screens must keep
 
 - Payment is after the service (cash/UPI). Bills say "To pay after the service".
-- A slot is a **request**; the team confirms it, "usually within 1–2 hours" (`kConfirmUsually` in `business_info.dart`). Cancel and change time are requests too (`requestCustomerChange`), never instant.
-- When a slot is taken while sending, `BookingCloudException.slotTaken` is true and the flow shows other open windows.
-- No ratings, reviews or expert names until they are real data (`kRatingValue` is null; bookings store only `workerId`).
+- A slot is a **request**; the team confirms it on WhatsApp, "usually within 1–2 hours" in working hours (8 AM – 6 PM). The server's `confirmBy` / `statusNote` say when. Cancelling a confirmed booking and changing the time are requests too, never instant.
+- **The server decides everything with money or time in it**: start times, prices, the bill (coupons, credit, automatic offers, GST), fees, plans. The app only shows them; never compute a price or a rule on the phone.
+- When a start time is taken while sending, the server answers `SLOT_TAKEN` with alternatives and the flow offers them.
+- Workers can't reject jobs; customers never see a worker's name, phone or location.
+- No ratings, reviews or expert names until they are real data (`kRatingValue` is null).
 
 ---
 
@@ -204,27 +205,32 @@ Scaffold(
 
 ```
 lib/
-  main.dart                 app entry, theme, text-scale clamp, Firebase init
+  main.dart                 app entry, theme, text-scale clamp, Firebase init, live catalog prices
   firebase_options.dart     Firebase config from --dart-define (no keys in repo)
   core/
     theme.dart              ← design tokens + ThemeData
     router.dart             routes + OTP login gate (authRedirect)
     format.dart             rupees, dates, phone formatting
-    pricing.dart            price tables, car types
-    scheduling.dart         slot/route rules engine (pure Dart, unit-tested)
+    pricing.dart            bundled price tables (fallback until the server catalog loads), car types
+    scheduling.dart         customer time labels (clockLabel, timeRangeLabel)
     constants.dart          phone, WhatsApp, links
   data/
+    api/                    the server API: models.dart (contract shapes), api.dart (interface),
+                            http_api.dart (ShineStaff, to build), fake/ (test-build server + its rules),
+                            address_convert.dart (address line ↔ server address)
+    auth_service.dart       phone OTP login: Firebase, or the fake (OTP 123456) in test builds
     business_info.dart      business facts shown to customers (hours, city, areas)
-    booking_cloud.dart      Firestore/Auth repository
     blog_data.dart
-  models/                   booking.dart, service.dart (catalog), worker.dart, blog_post.dart
-  providers/app_providers.dart
+  models/                   booking.dart (profile, address line, request ref), service.dart (catalog), address.dart, blog_post.dart
+  providers/                api_providers.dart (api, auth, config, catalog, offers, me, coverage),
+                            booking_providers.dart (draft, availability, quote, bookings, plans, AutoRefresh),
+                            app_providers.dart (profile, saved addresses, picked offer)
   widgets/                  ← shared components (section 3)
   screens/
-    auth/                   login, OTP, name
-    booking/                3-step booking flow: Extras (skipped when none) → Pick a time → Review (booking_flow_screen + booking_steps)
-    ops/                    staff booking desk (board, queue, roster, capacity)
-    home, services, service_detail, bookings, booking_detail, booking_sent, profile, wallet (Offers), addresses, blog, splash
+    auth/                   login, OTP, name, address
+    booking/                3-step booking flow: Extras (skipped when none) → Pick a time → Review (booking_flow_screen + booking_steps); also plan purchase and plan visits
+    home, services, service_detail, bookings, booking_detail, booking_sent, profile, wallet (Offers), referral, plans, addresses, blog, splash
+    test_tools_screen.dart  test builds only: act as the admin and worker
 test/
   *_test.dart               unit, behaviour and layout tests (run with `flutter test`)
   fixtures.dart             shared customer/booking data for tests and screenshots
@@ -246,3 +252,14 @@ Feature pattern: a screen file owns its layout and private sub-widgets; data com
    - `flutter analyze` (must be clean)
    - `flutter test` (layout tests catch overflow at 130 % text)
    - Visual check: `flutter test test/screenshots/screens_dev.dart --dart-define=ONLY=home,flow3`, with `SHOTS_DIR` set to an output folder. It writes `<name>_fold.png` (what a phone shows without scrolling) and `<name>_full.png` with real fonts. Compare them against the Figma frame. Add `--dart-define=WIDTH=360 --dart-define=TEXT_SCALE=1.15` to check a small phone with large text.
+
+---
+
+## 9. Server, test builds and the fake server
+
+- All booking data comes from the server through `CleanCruisersApi` (`lib/data/api/api.dart`), following `docs/API_CONTRACT.md`. The business rules and the customer-to-admin parity are in `docs/SHINESTAFF_ADMIN_PARITY.md`.
+- **Test build:** `flutter run --dart-define=FAKE_SERVER=true`. Login takes any 10-digit number with OTP **123456**; an in-app fake server (`lib/data/api/fake/`) answers like ShineStaff and saves its state on the phone. Profile → **Test tools** acts as the admin and worker (confirm, on the way, complete, rain, car is an SUV…). Profile → reset test data starts over.
+- **Real server:** `--dart-define=API_BASE_URL=https://…`. `HttpApi` is still a placeholder until ShineStaff implements the contract.
+- `test/fake_api_test.dart` lists the server rules (capacity, holds, money, fees, plans…). ShineStaff must pass the same cases.
+- Booking screens refresh every 30 s while open (`AutoRefresh` in `booking_providers.dart`) and on pull.
+- Tests that need data use `fixtureApi()`, `fixtureBooking(api, Fx.…)` and `fakeOverrides(api)` from `test/fixtures.dart`.

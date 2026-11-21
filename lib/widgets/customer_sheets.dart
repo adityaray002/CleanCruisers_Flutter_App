@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import '../core/scheduling.dart';
+import '../data/api/models.dart' show Coverage;
 import '../core/theme.dart';
 import '../data/business_info.dart';
 import '../models/address.dart';
 import '../models/booking.dart';
+import '../providers/api_providers.dart';
 import '../providers/app_providers.dart';
 import '../screens/auth/login_screen.dart' show CarTypePicker;
 import 'contact_actions.dart';
@@ -325,8 +326,10 @@ class _AddressFormState extends ConsumerState<AddressForm> {
           hint: 'e.g. near gate 2 entry', last: true),
       const SizedBox(height: 4),
       _CoverageHint(
-        coverage: checkCoverage(parsePin(_pin),
-            ref.watch(serviceAreasProvider).valueOrNull ?? const []),
+        coverage: ref.watch(coverageProvider(coverageKey(
+                    [_c['area']?.text ?? '', _c['landmark']?.text ?? ''].join(' '),
+                    _pin))).valueOrNull ??
+            Coverage.unverified,
       ),
     ]);
   }
@@ -452,11 +455,13 @@ Future<void> showCarSheet(BuildContext context, WidgetRef ref) {
 
 // ── Saved addresses (Zomato / Blinkit style) ────────────────────────────────
 
-/// Do we serve [a]? A map pin is checked against the service areas; without
-/// one, an address naming a served area counts. Otherwise: "We'll check".
-Coverage addressCoverage(SavedAddress a, List<ServiceArea> areas) {
-  final byPin = checkCoverage(parsePin(a.pin), areas);
-  if (byPin != Coverage.unverified) return byPin;
+/// Do we serve [a]? The server decides from the map pin or the pincode;
+/// until it answers (or offline), an address naming a served area counts as
+/// served, anything else "We'll check".
+Coverage addressCoverage(WidgetRef ref, SavedAddress a) {
+  final server =
+      ref.watch(coverageProvider(coverageKey(a.address, a.pin))).valueOrNull;
+  if (server != null && server != Coverage.unverified) return server;
   final text = a.address.toLowerCase();
   return kServiceAreas.any((n) => text.contains(n.toLowerCase()))
       ? Coverage.covered
@@ -541,7 +546,6 @@ class _AddressPickerState extends ConsumerState<_AddressPicker> {
   @override
   Widget build(BuildContext context) {
     final book = ref.watch(addressBookProvider);
-    final areas = ref.watch(serviceAreasProvider).valueOrNull ?? const [];
     final selected = book.selected?.id;
     return ConstrainedBox(
       constraints:
@@ -580,9 +584,9 @@ class _AddressPickerState extends ConsumerState<_AddressPicker> {
               _AddressTile(
                 address: a,
                 selected: a.id == selected,
-                coverage: addressCoverage(a, areas),
+                coverage: addressCoverage(ref, a),
                 onTap: () async {
-                  if (addressCoverage(a, areas) == Coverage.notCovered) {
+                  if (addressCoverage(ref, a) == Coverage.notCovered) {
                     setState(() => _error =
                         'We don\'t wash cars at ${addressLabelNames[a.label]} '
                             'yet. Pick another address.');

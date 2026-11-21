@@ -2,7 +2,6 @@ import '../data/api/models.dart' show PublicOffer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme.dart';
-import '../data/offers.dart';
 import 'ui.dart';
 
 /// A coupon as a ticket: big "₹40 OFF" stub on the left, the rules and the
@@ -16,18 +15,6 @@ class OfferCard extends StatelessWidget {
   final bool applied;
   final String actionLabel;
   final VoidCallback? onAction;
-
-  OfferCard({
-    super.key,
-    required Offer offer,
-    this.blockedReason,
-    this.applied = false,
-    required this.actionLabel,
-    this.onAction,
-  })  : code = offer.code,
-        title = offer.title,
-        headline = offer.headline,
-        conditions = offer.conditions;
 
   /// An offer from the server (contract `GET /offers`).
   OfferCard.public({

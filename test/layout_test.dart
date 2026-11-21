@@ -6,7 +6,6 @@ import 'package:cleancruisers_app/screens/referral_screen.dart';
 import 'package:cleancruisers_app/core/theme.dart';
 import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
 import 'package:cleancruisers_app/data/auth_service.dart';
-import 'package:cleancruisers_app/data/booking_cloud.dart' show OtpSession;
 import 'package:cleancruisers_app/models/service.dart';
 import 'package:cleancruisers_app/providers/api_providers.dart';
 import 'package:cleancruisers_app/providers/app_providers.dart';
@@ -74,7 +73,7 @@ void main() {
         (const ServiceDetailScreen(serviceId: 'full-package'), const {}),
     'Profile': (const ProfileScreen(), profile),
     'Offers': (const WalletScreen(), profile),
-    'My addresses': (const AddressesScreen(), bookingPrefs()),
+    'My addresses': (const AddressesScreen(), profile),
     'My addresses (empty)': (const AddressesScreen(), const {}),
     'Login': (const LoginScreen(), const {}),
     'OTP': (

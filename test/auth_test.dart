@@ -8,7 +8,6 @@ import 'package:cleancruisers_app/core/router.dart';
 import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
 import 'package:cleancruisers_app/data/api/models.dart';
 import 'package:cleancruisers_app/data/auth_service.dart';
-import 'package:cleancruisers_app/data/booking_cloud.dart';
 import 'package:cleancruisers_app/providers/api_providers.dart';
 import 'package:cleancruisers_app/providers/app_providers.dart';
 import 'package:flutter/material.dart';
@@ -33,7 +32,7 @@ void main() {
       final prefs = await freshPrefs();
       final auth = FakeAuthService(FakeApi(), prefs);
       final session = await auth.sendOtp('9876543210');
-      await expectLater(auth.verifyOtp(session, '000000'), throwsA(isA<BookingCloudException>()));
+      await expectLater(auth.verifyOtp(session, '000000'), throwsA(isA<AuthException>()));
       expect(auth.signedIn, isFalse);
 
       await auth.verifyOtp(session, '123456');
@@ -48,7 +47,7 @@ void main() {
 
     test('a bad number is refused before any OTP', () async {
       final auth = FakeAuthService(FakeApi(), await freshPrefs());
-      await expectLater(auth.sendOtp('12345'), throwsA(isA<BookingCloudException>()));
+      await expectLater(auth.sendOtp('12345'), throwsA(isA<AuthException>()));
     });
 
     test('saving the name finishes sign-up; logging out forgets the phone', () async {

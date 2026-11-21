@@ -354,6 +354,17 @@ All subject to J1. One use per phone number. "First booking" = no earlier confir
 ### J6. Rain
 A wash postponed for rain gives the customer ₹50 CleanCredit (J4) and a new-time offer.
 
+## K. Route rules from the old Firebase desk (for ShineStaff)
+
+The app's old staff desk (removed from the app on 21 Nov 2026; see git history before the
+"cleanup (slice 6)" commit, `lib/core/scheduling.dart` and `test/scheduling_test.dart`) checked
+these rules when assigning a worker. ShineStaff's suggested-worker logic (G2) should keep them:
+- every road leg (home → first job, job → job, last job → home) at most 25 km;
+- arrival inside the customer's time, no overlapping jobs, customer work done by 6 PM;
+- lunch protected: 30 min taken in a free gap between 1:00 and 1:30 PM, or the work pauses for it;
+- emergency worker: one morning job, back at standby by 11 AM; beyond 25 km only with a written reason;
+- weekly off, approved leave, skills, and a reported puncture/sickness block new work that day.
+
 ## F. Not known yet
 
 - Where ShineStaff's real git repo is (only a zip was shared).

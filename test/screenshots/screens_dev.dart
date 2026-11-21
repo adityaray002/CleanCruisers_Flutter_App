@@ -4,7 +4,6 @@
 // without scrolling) and "<name>_full" at full length.
 import 'package:cleancruisers_app/data/api/fake/fake_api.dart';
 import 'package:cleancruisers_app/data/auth_service.dart';
-import 'package:cleancruisers_app/data/booking_cloud.dart';
 import 'package:cleancruisers_app/models/service.dart';
 import 'package:cleancruisers_app/providers/api_providers.dart';
 import 'package:cleancruisers_app/providers/app_providers.dart';
@@ -157,7 +156,7 @@ void main() {
       prefs: profile,
       overrides: fakeOverrides(toolsApi));
   both('profile', const ProfileScreen(), 2000, prefs: profile);
-  both('addresses', const AddressesScreen(), 1000, prefs: bookingPrefs());
+  withBooking('addresses', Fx.confirmed, (_) => const AddressesScreen(), 1000);
   both('address_sheet', const HomeScreen(), 800, prefs: profile,
       interact: (t) async {
     await t.tap(find.text('Car parked at'));

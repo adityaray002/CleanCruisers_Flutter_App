@@ -8,7 +8,7 @@ import '../../core/pricing.dart';
 import '../../core/theme.dart';
 import '../../data/api/fake/fake_api.dart' show FakeApi;
 import '../../data/api/models.dart' show ApiCar;
-import '../../data/booking_cloud.dart';
+import '../../data/auth_service.dart';
 import '../../data/business_info.dart';
 import '../../models/address.dart';
 import '../../models/booking.dart';
@@ -230,7 +230,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _sending = false;
   String? _error;
 
-  bool get _valid => BookingDraft.phoneRe.hasMatch(_phone.text.trim());
+  bool get _valid => kPhoneRe.hasMatch(_phone.text.trim());
 
   @override
   void dispose() {
@@ -251,7 +251,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       // Android may verify on its own; the router then moves on.
       if (!session.autoVerified) context.push('/login/otp', extra: session);
-    } on BookingCloudException catch (e) {
+    } on AuthException catch (e) {
       setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -392,7 +392,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     try {
       await ref.read(authServiceProvider).verifyOtp(_session, _code.text);
       // The router redirects once the user is signed in.
-    } on BookingCloudException catch (e) {
+    } on AuthException catch (e) {
       setState(() {
         _error = e.message;
         _code.clear();
@@ -411,7 +411,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
           .sendOtp(_session.phone, resend: _session);
       _startTimer();
       if (mounted) showMessage(context, 'A new OTP is on its way.');
-    } on BookingCloudException catch (e) {
+    } on AuthException catch (e) {
       setState(() => _error = e.message);
     }
   }

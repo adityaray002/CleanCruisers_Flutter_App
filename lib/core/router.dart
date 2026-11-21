@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../data/booking_cloud.dart';
+import '../data/auth_service.dart' show OtpSession;
 import '../providers/api_providers.dart';
 import '../models/service.dart';
 import '../providers/app_providers.dart';
@@ -16,8 +16,6 @@ import '../screens/booking_sent_screen.dart';
 import '../screens/bookings_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/main_shell.dart';
-import '../screens/ops/ops_dashboard_screen.dart';
-import '../screens/ops/ops_login_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/referral_screen.dart';
@@ -49,9 +47,9 @@ class _AuthRefresh extends ChangeNotifier {
 }
 
 /// Customers log in with a phone OTP, then give their name, car and address
-/// once (so bookings never ask for them). The staff desk
-/// (/ops) has its own email login. Builds where OTP login isn't available
-/// (no Firebase, not a test build) skip the gate (booking then fails closed).
+/// once (so bookings never ask for them). Builds where OTP login isn't
+/// available (no Firebase, not a test build) skip the gate; the server then
+/// refuses bookings, and the app says so.
 String? authRedirect(
   String path, {
   required bool configured,
@@ -60,7 +58,7 @@ String? authRedirect(
   bool hasSetup = true,
 }) {
   if (path == '/') return '/home';
-  if (path == '/splash' || path.startsWith('/ops') || !configured) return null;
+  if (path == '/splash' || !configured) return null;
   final onLogin = path.startsWith('/login');
   const onboarding = {'/login/name', '/login/address'};
   if (!signedIn) {
@@ -113,8 +111,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login/name', builder: (_, __) => const NameScreen()),
       GoRoute(
           path: '/login/address', builder: (_, __) => const AddressScreen()),
-      GoRoute(path: '/ops/login', builder: (_, __) => const OpsLoginScreen()),
-      GoRoute(path: '/ops', builder: (_, __) => const OpsDashboardScreen()),
       if (kFakeServer)
         GoRoute(path: '/test-tools', builder: (_, __) => const TestToolsScreen()),
       ShellRoute(

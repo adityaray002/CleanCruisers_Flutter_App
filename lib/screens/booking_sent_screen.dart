@@ -224,7 +224,7 @@ class _StatusCard extends StatelessWidget {
         const SizedBox(height: 2),
         Text('$what · $car', style: AppText.small),
         const SizedBox(height: AppSpace.lg),
-        BookingProgress(status: progressStatusOf(b.status)),
+        BookingProgress(status: b.status),
         const Divider(height: AppSpace.xl),
         Row(children: [
           Expanded(

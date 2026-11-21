@@ -1,6 +1,6 @@
 import '../providers/api_providers.dart';
 import '../core/scheduling.dart' show clockLabel;
-import '../data/api/models.dart' show Booking, BookingState;
+import '../data/api/models.dart' show Booking, BookingState, Coverage, PublicOffer;
 import '../providers/booking_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,10 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
 import '../core/pricing.dart';
-import '../core/scheduling.dart' show Coverage;
 import '../core/theme.dart';
 import '../data/business_info.dart';
-import '../data/offers.dart';
 import '../models/service.dart';
 import '../widgets/booking_progress.dart';
 import '../widgets/brand_header.dart';
@@ -53,12 +51,10 @@ class HomeScreen extends ConsumerWidget {
             b.plan == null &&
             serviceById(b.service.id) != null)
         .firstOrNull;
+    // The server's first-booking coupon (contract `GET /offers`), if any.
     final firstOffer = isNew
-        ? kOffers
-            .where((o) =>
-                o.firstBookingOnly &&
-                (o.onlyFor == null ||
-                    (car != null && o.onlyFor!.contains(car))))
+        ? (ref.watch(publicOffersProvider).valueOrNull ?? const [])
+            .where((o) => o.conditions.contains('First booking only'))
             .firstOrNull
         : null;
 
@@ -150,8 +146,7 @@ class _HeaderState extends ConsumerState<_Header> {
   @override
   Widget build(BuildContext context) {
     final sel = ref.watch(addressBookProvider).selected;
-    final areas = ref.watch(serviceAreasProvider).valueOrNull ?? const [];
-    final coverage = sel == null ? null : addressCoverage(sel, areas);
+    final coverage = sel == null ? null : addressCoverage(ref, sel);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
@@ -216,17 +211,13 @@ class _HeaderState extends ConsumerState<_Header> {
 /// Our team's photo with the promise and, when one is live, the
 /// first-booking offer. Text sits on a dark fade so it reads on any crop.
 class _Hero extends StatelessWidget {
-  final Offer? firstOffer;
+  final PublicOffer? firstOffer;
   const _Hero({required this.firstOffer});
 
   @override
   Widget build(BuildContext context) {
     final o = firstOffer;
-    final off = o == null
-        ? null
-        : (o.percentOff > 0
-            ? '${o.percentOff}% off'
-            : '${rupees(o.flatOff)} off');
+    final off = o?.headline.replaceAll('OFF', 'off');
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Stack(children: [
@@ -854,7 +845,7 @@ class _LiveBookingCard extends StatelessWidget {
       service?.listName ?? b.service.name,
       carLabel,
     ].join(' · ');
-    final step = progressIndex(progressStatusOf(b.status));
+    final step = progressIndex(b.status);
     final (chip, _) = chipOf(b.status);
 
     return Semantics(

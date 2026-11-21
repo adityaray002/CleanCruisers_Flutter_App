@@ -48,7 +48,7 @@ final authServiceProvider = Provider<AuthService>((ref) {
   if (kFakeServer) {
     return FakeAuthService(ref.watch(fakeApiProvider), ref.watch(sharedPrefsProvider));
   }
-  return FirebaseAuthService(ref.watch(bookingCloudProvider));
+  return FirebaseAuthService();
 });
 
 final apiConfigProvider = FutureProvider<ApiConfig>((ref) => ref.watch(apiProvider).config());
@@ -57,6 +57,25 @@ final catalogProvider = FutureProvider<Catalog>((ref) => ref.watch(apiProvider).
 
 final publicOffersProvider =
     FutureProvider<List<PublicOffer>>((ref) => ref.watch(apiProvider).offers());
+
+/// Do we serve this spot? (contract `GET /coverage`), keyed by
+/// [coverageKey]. Uses the map pin, or a pincode in the address line.
+final coverageProvider =
+    FutureProvider.autoDispose.family<Coverage, String>((ref, key) async {
+  final i = key.indexOf('|');
+  final line = key.substring(0, i), pin = key.substring(i + 1);
+  final ll = pin.split(',');
+  final lat = ll.length == 2 ? double.tryParse(ll[0]) : null;
+  final lng = ll.length == 2 ? double.tryParse(ll[1]) : null;
+  final pincode = RegExp(r'\b\d{6}\b').firstMatch(line)?.group(0);
+  if (lat == null && pincode == null) return Coverage.unverified;
+  final r = await ref
+      .watch(apiProvider)
+      .coverage(lat: lat, lng: lng, pincode: pincode);
+  return r.coverage;
+});
+
+String coverageKey(String line, String? pin) => '$line|${pin ?? ''}';
 
 /// The signed-in customer. Invalidate after login, logout or profile edits.
 final meProvider = FutureProvider<Me>((ref) => ref.watch(apiProvider).me());

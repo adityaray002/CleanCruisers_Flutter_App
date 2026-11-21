@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
-import '../core/scheduling.dart' show Coverage;
 import '../core/theme.dart';
 import '../models/address.dart';
 import '../data/api/address_convert.dart';
-import '../data/api/models.dart' show Booking, BookingStateInfo;
+import '../data/api/models.dart' show Booking, BookingStateInfo, Coverage;
 import '../models/booking.dart';
 import '../providers/booking_providers.dart';
 import '../providers/app_providers.dart';
@@ -35,7 +34,6 @@ class AddressesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final book = ref.watch(addressBookProvider);
-    final areas = ref.watch(serviceAreasProvider).valueOrNull ?? const [];
     final bookings =
         ref.watch(myApiBookingsProvider).valueOrNull?.upcoming ?? const <Booking>[];
 
@@ -103,7 +101,7 @@ class AddressesScreen extends ConsumerWidget {
                 _AddressCard(
                   address: a,
                   inUse: a.id == book.selected?.id,
-                  coverage: addressCoverage(a, areas),
+                  coverage: addressCoverage(ref, a),
                   booking: bookingUsing(a, bookings),
                   onEdit: () => showAddressForm(context, ref, existing: a),
                   onDelete: () => _delete(context, ref, a, bookings),

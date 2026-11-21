@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'package:cleancruisers_app/core/scheduling.dart';
 import 'package:cleancruisers_app/models/address.dart';
 import 'package:cleancruisers_app/providers/app_providers.dart';
-import 'package:cleancruisers_app/widgets/customer_sheets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,14 +47,5 @@ void main() {
     expect(c.read(addressBookProvider).selected?.id, 'w',
         reason: 'deleting the selected one falls back to the next');
     expect(c.read(profileProvider).address, 'Tower 3, Dwarka');
-  });
-
-  test('availability: map pin first, then a served area name', () {
-    const typed = SavedAddress(
-        id: '1', label: AddressLabel.home, address: 'B-12, Janakpuri');
-    const unknown = SavedAddress(
-        id: '2', label: AddressLabel.other, address: 'Flat 4, Somewhere');
-    expect(addressCoverage(typed, const []), Coverage.covered);
-    expect(addressCoverage(unknown, const []), Coverage.unverified);
   });
 }

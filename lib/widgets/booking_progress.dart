@@ -4,7 +4,6 @@ import '../core/format.dart';
 import '../core/scheduling.dart' show clockLabel;
 import '../data/api/models.dart' show Booking, BookingState;
 import 'ui.dart' show PillTone;
-import '../models/booking.dart';
 
 const _steps = ['Requested', 'Confirmed', 'On the way', 'Cleaning', 'Done'];
 
@@ -37,58 +36,20 @@ String headlineOf(Booking b) => switch (b.status) {
       BookingState.unableToServe => "We couldn't take this booking",
     };
 
-/// The stepper's status for a server booking (contract statuses).
-BookingStatus progressStatusOf(BookingState s) => switch (s) {
-      BookingState.requested => BookingStatus.requested,
-      BookingState.confirmed => BookingStatus.confirmed,
-      BookingState.onTheWay => BookingStatus.onTheWay,
-      BookingState.inService => BookingStatus.inService,
-      BookingState.rescheduleNeeded => BookingStatus.rescheduleNeeded,
-      BookingState.completed => BookingStatus.completed,
-      BookingState.missed || BookingState.cancelled => BookingStatus.cancelled,
-      BookingState.unableToServe => BookingStatus.unableToServe,
-    };
-
 /// Position of a booking on the happy path, or null when it has left it
-/// (reschedule needed, cancelled, unable to serve).
-int? progressIndex(BookingStatus s) => switch (s) {
-      BookingStatus.requested || BookingStatus.teamReview => 0,
-      BookingStatus.confirmed => 1,
-      BookingStatus.onTheWay => 2,
-      BookingStatus.inService => 3,
-      BookingStatus.completed => 4,
+/// (new time needed, missed, cancelled, couldn't take it).
+int? progressIndex(BookingState s) => switch (s) {
+      BookingState.requested => 0,
+      BookingState.confirmed => 1,
+      BookingState.onTheWay => 2,
+      BookingState.inService => 3,
+      BookingState.completed => 4,
       _ => null,
     };
 
-/// Customer-friendly one-liner for a booking's current state.
-String progressHeadline(BookingRecord b) {
-  final slot = slotById(b.slotId);
-  final arrival = b.confirmedArrivalLabel;
-  return switch (b.status) {
-    BookingStatus.requested =>
-      'Finding an expert for ${slot?.short ?? b.slotLabel}',
-    BookingStatus.teamReview => b.customerNote == null
-        ? 'Our team is checking your booking'
-        : 'Our team has a question for you',
-    // The slot is the promise; the planned arrival can still move within it,
-    // so it goes on the line underneath ("Likely around …").
-    BookingStatus.confirmed => arrival == null
-        ? 'Booking confirmed'
-        // Non-breaking spaces and word joiners keep "9:30 – 10:30 AM" on
-        // one line (a line may otherwise break after the dash).
-        : 'Expert arrives ${(slot?.short ?? b.slotLabel).replaceAll(' ', ' ').replaceAll('–', '⁠–⁠')}',
-    BookingStatus.onTheWay => 'Your expert is on the way',
-    BookingStatus.inService => 'Your car is being cleaned',
-    BookingStatus.completed => 'All done. Hope you love it!',
-    BookingStatus.rescheduleNeeded => 'Please pick a new time',
-    BookingStatus.cancelled => 'Booking cancelled',
-    BookingStatus.unableToServe => 'We couldn\'t take this booking',
-  };
-}
-
 /// Horizontal stepper: dots joined by a line, labels underneath.
 class BookingProgress extends StatelessWidget {
-  final BookingStatus status;
+  final BookingState status;
   final bool showLabels;
   const BookingProgress(
       {super.key, required this.status, this.showLabels = true});

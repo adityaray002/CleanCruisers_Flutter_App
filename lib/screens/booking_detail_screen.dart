@@ -438,7 +438,7 @@ class _StatusCard extends StatelessWidget {
       case BookingState.confirmed:
       case BookingState.onTheWay:
       case BookingState.inService:
-        final step = progressIndex(progressStatusOf(b.status)) ?? 1;
+        final step = progressIndex(b.status) ?? 1;
         return Container(
           padding: const EdgeInsets.all(AppSpace.lg),
           decoration: BoxDecoration(
@@ -490,7 +490,7 @@ class _StatusCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(b.statusNote, style: AppText.small),
             const SizedBox(height: AppSpace.lg),
-            BookingProgress(status: progressStatusOf(b.status)),
+            BookingProgress(status: b.status),
           ]),
         );
       case BookingState.rescheduleNeeded:

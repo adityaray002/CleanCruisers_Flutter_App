@@ -188,7 +188,7 @@ class _UpcomingCard extends StatelessWidget {
       _carOf(b),
     ].join(' · ');
     final waiting = b.status == BookingState.requested;
-    final step = progressIndex(progressStatusOf(b.status));
+    final step = progressIndex(b.status);
     final request = switch (b.openRequest?.kind) {
       'cancel' => 'Cancellation requested. We\'ll confirm on WhatsApp.',
       'changeTime' => 'New time requested. We\'ll confirm on WhatsApp.',
@@ -233,7 +233,7 @@ class _UpcomingCard extends StatelessWidget {
               ),
             ] else if (step != null) ...[
               const SizedBox(height: AppSpace.md),
-              BookingProgress(status: progressStatusOf(b.status), showLabels: false),
+              BookingProgress(status: b.status, showLabels: false),
             ],
             if (b.pendingChange != null) ...[
               const SizedBox(height: AppSpace.md),
