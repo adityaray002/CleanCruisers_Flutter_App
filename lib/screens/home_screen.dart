@@ -77,7 +77,7 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.xxl),
             children: [
               _Top(hasUpdate: live != null, firstOffer: firstOffer, car: car),
-              const SizedBox(height: AppSpace.lg),
+              const SizedBox(height: AppSpace.md),
               if (live != null)
                 Padding(
                   padding: _section(),
@@ -167,7 +167,7 @@ class _Top extends StatelessWidget {
             // space under the header, so the hero stays short and Popular
             // services fit on the first screen.
             Transform.translate(
-              offset: const Offset(AppSpace.sm, AppSpace.lg),
+              offset: const Offset(AppSpace.sm, 22),
               child: SizedBox(
                 width: 117,
                 height: 148,
@@ -408,6 +408,9 @@ class _ActionCards extends StatelessWidget {
             line: 'Polish, wax, dry clean',
             from: cheapestIn(ServiceCategory.detailing),
             image: 'assets/images/icon3d_polish.png',
+            // The polisher is compact and heavy; a bit smaller it weighs
+            // the same as the long, thin foam cannon.
+            iconHeight: 46,
             onTap: () => context.go('/services?cat=detailing'),
           ),
         ),
@@ -420,12 +423,14 @@ class _ActionCard extends StatelessWidget {
   final String title, line, image;
   final int from;
   final VoidCallback onTap;
+  final double iconHeight;
   const _ActionCard({
     required this.title,
     required this.line,
     required this.from,
     required this.image,
     required this.onTap,
+    this.iconHeight = 52,
   });
 
   @override
@@ -474,7 +479,7 @@ class _ActionCard extends StatelessWidget {
                                 alignment: Alignment.centerLeft,
                                 maxWidth: 66,
                                 child: Image.asset(image,
-                                    height: 52,
+                                    height: iconHeight,
                                     width: 66,
                                     fit: BoxFit.contain,
                                     cacheHeight: 156,
@@ -646,12 +651,13 @@ class _PopularServices extends StatelessWidget {
             foregroundColor: AppColors.primary,
             textStyle: AppText.smallStrong,
             minimumSize: const Size(0, 40),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
           ),
           child: const Text('See all'),
         ),
       ]),
-      const SizedBox(height: AppSpace.md),
+      const SizedBox(height: AppSpace.sm),
       LayoutBuilder(builder: (context, c) {
         const gap = AppSpace.md;
         final w = ((c.maxWidth - 2 * gap) / 3).floorToDouble();
