@@ -148,6 +148,15 @@ void main() {
     await expectLater(a.config(), throwsA(isA<ApiException>().having((e) => e.code, 'code', ApiCode.unavailable)));
   });
 
+  test('a customer in another state: the bill carries IGST', () {
+    final g = GstSplit.fromJson({'taxable': 381, 'cgst': 0, 'sgst': 0, 'igst': 68, 'rate': 18});
+    expect(g.tax, 68);
+    expect(g.toJson()['igst'], 68);
+    final same = GstSplit.fromJson({'taxable': 381, 'cgst': 34, 'sgst': 34, 'rate': 18});
+    expect(same.tax, 68);
+    expect(same.toJson().containsKey('igst'), isFalse);
+  });
+
   test('availability sends the contract query', () async {
     final a = api((_) async => json({'date': '2026-11-22', 'durationMinutes': 150, 'slots': [], 'closedReason': 'Closed for Diwali'}));
     final av = await a.availability(

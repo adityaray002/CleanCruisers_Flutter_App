@@ -5,7 +5,7 @@
 //     --dart-define=E2E_API=http://localhost:5000 \
 //     --dart-define=E2E_ADMIN_PHONE=… --dart-define=E2E_ADMIN_PASSWORD=…
 //
-// The server must run with APP_AUTH_DEV=true (dev tokens) and have at least
+// The server must run with APP_AUTH_DEV=true and APP_ENV=staging (dev tokens) and have at least
 // one active CleanCruisers worker.
 
 import 'dart:convert';

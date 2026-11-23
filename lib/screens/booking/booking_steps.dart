@@ -565,7 +565,7 @@ class BillCard extends ConsumerWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-                'Includes GST ${rupees(b.gst.cgst + b.gst.sgst)} '
+                'Includes GST ${rupees(b.gst.tax)} '
                 '(${b.gst.rate}%)',
                 style: AppText.caption),
           ),

@@ -527,8 +527,14 @@ class BillDiscount {
 }
 
 class GstSplit {
-  final int taxable, cgst, sgst, rate;
-  const GstSplit({required this.taxable, required this.cgst, required this.sgst, required this.rate});
+  /// [igst]: a customer in another state than the business (e.g. Noida with
+  /// a Delhi GSTIN) pays IGST instead of CGST + SGST.
+  final int taxable, cgst, sgst, igst, rate;
+  const GstSplit(
+      {required this.taxable, required this.cgst, required this.sgst, this.igst = 0, required this.rate});
+
+  /// All the GST in the bill.
+  int get tax => cgst + sgst + igst;
 
   /// Splits a GST-inclusive [total] so taxable + cgst + sgst == total.
   factory GstSplit.ofInclusive(int total, {int rate = 18}) {
@@ -542,10 +548,17 @@ class GstSplit {
         taxable: j['taxable'] as int,
         cgst: j['cgst'] as int,
         sgst: j['sgst'] as int,
+        igst: j['igst'] as int? ?? 0,
         rate: j['rate'] as int,
       );
 
-  Map<String, dynamic> toJson() => {'taxable': taxable, 'cgst': cgst, 'sgst': sgst, 'rate': rate};
+  Map<String, dynamic> toJson() => {
+        'taxable': taxable,
+        'cgst': cgst,
+        'sgst': sgst,
+        if (igst > 0) 'igst': igst,
+        'rate': rate,
+      };
 }
 
 class Bill {

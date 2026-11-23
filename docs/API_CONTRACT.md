@@ -86,7 +86,7 @@ Customer copy: "Expert arrives at 9:30 AM, car ready by about 11:30 AM".
   ],
   "lateCancelFee": 0,              // ₹100 carried from an earlier late cancel / no-show, if any
   "total": 469,                    // what the customer pays, GST included
-  "gst": { "taxable": 397, "cgst": 36, "sgst": 36, "rate": 18 },
+  "gst": { "taxable": 397, "cgst": 36, "sgst": 36, "rate": 18 },   // customer in another state: "cgst": 0, "sgst": 0, "igst": 72
   "discountCapNote": null,         // e.g. "Up to ₹72 off on this booking" when the margin floor limited it
   "payAfterService": true
 }

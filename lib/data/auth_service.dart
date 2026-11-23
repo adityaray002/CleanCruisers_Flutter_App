@@ -9,7 +9,8 @@
 //   across app restarts.
 // - DevAuthService: the real ShineStaff server without Firebase
 //   (--dart-define=API_BASE_URL=… --dart-define=DEV_LOGIN=true). Any number,
-//   OTP 123456, and the server must run with APP_AUTH_DEV=true, which
+//   OTP 123456, and the server must run with APP_AUTH_DEV=true and
+//   APP_ENV=staging (ShineStaff docs/STAGING.md), which
 //   ShineStaff refuses in production. For testing on a local or staging server.
 
 import 'dart:async';

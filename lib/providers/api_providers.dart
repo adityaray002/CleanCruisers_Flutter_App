@@ -6,7 +6,8 @@
 //   --dart-define=API_BASE_URL=https://…  the real ShineStaff, Firebase OTP login
 //   + --dart-define=DEV_LOGIN=true        …with a test login instead of Firebase
 //                                         (any number, OTP 123456; the server
-//                                         must allow it: APP_AUTH_DEV=true)
+//                                         must allow it: APP_AUTH_DEV=true and
+//                                         APP_ENV=staging)
 
 import 'dart:convert';
 

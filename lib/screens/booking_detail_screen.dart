@@ -938,7 +938,7 @@ class _Details extends StatelessWidget {
         ]),
         if (!notCharged)
           Text(
-            'Includes GST ${rupees(bill.gst.cgst + bill.gst.sgst)} '
+            'Includes GST ${rupees(bill.gst.tax)} '
             '(${bill.gst.rate}%)${!paid && kPayAfterService ? ' · cash or UPI to the expert' : ''}',
             style: AppText.caption),
         if (b.invoice != null) ...[
