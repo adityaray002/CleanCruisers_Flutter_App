@@ -226,7 +226,7 @@ class _HeaderState extends ConsumerState<_Header> {
         const SizedBox(width: 10),
         const Expanded(child: ParkedAtLine(withOverline: true, onDark: true)),
         const SizedBox(width: AppSpace.sm),
-        const CarPill(),
+        const CarPill(onDark: true),
         const SizedBox(width: AppSpace.sm),
         Semantics(
           button: true,
@@ -235,11 +235,12 @@ class _HeaderState extends ConsumerState<_Header> {
               : 'Booking updates',
           child: ExcludeSemantics(
             child: RoundSurface(
+              onDark: true,
               onTap: () => context.go('/bookings'),
               padding: const EdgeInsets.all(11),
               child: Stack(clipBehavior: Clip.none, children: [
                 const Icon(Icons.notifications_none_rounded,
-                    size: 20, color: AppColors.text),
+                    size: 20, color: Colors.white),
                 if (widget.hasUpdate)
                   Positioned(
                     top: 0,
@@ -251,7 +252,7 @@ class _HeaderState extends ConsumerState<_Header> {
                         color: AppColors.error,
                         shape: BoxShape.circle,
                         border:
-                            Border.all(color: AppColors.surface, width: 1.5),
+                            Border.all(color: AppColors.primary, width: 1.5),
                       ),
                     ),
                   ),
@@ -459,10 +460,10 @@ class _ActionCard extends StatelessWidget {
                               height: 52,
                               child: OverflowBox(
                                 alignment: Alignment.centerLeft,
-                                maxWidth: 62,
+                                maxWidth: 66,
                                 child: Image.asset(image,
                                     height: 52,
-                                    width: 62,
+                                    width: 66,
                                     fit: BoxFit.contain,
                                     cacheHeight: 156,
                                     excludeFromSemantics: true),
@@ -799,8 +800,9 @@ class _ServiceTile extends StatelessWidget {
           label: 'Book ${s.name}',
           child: InkWell(
             onTap: book,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
               child: Row(children: [
                 Text('Book',
                     style: AppText.smallStrong.copyWith(

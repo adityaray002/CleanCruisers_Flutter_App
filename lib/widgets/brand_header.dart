@@ -47,7 +47,9 @@ class BrandWithAddress extends StatelessWidget {
 /// "🚗 Hatchback ⌄": the car whose prices the app shows. Opens the car
 /// sheet. Shows the saved model ("Swift") when there is one.
 class CarPill extends ConsumerWidget {
-  const CarPill({super.key});
+  /// See-through white on a green band (Home), instead of a white pill.
+  final bool onDark;
+  const CarPill({super.key, this.onDark = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,23 +73,26 @@ class CarPill extends ConsumerWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 130, minHeight: 44),
           child: RoundSurface(
+            onDark: onDark,
             onTap: () => showCarSheet(context, ref),
             padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.directions_car_outlined,
-                  size: 18, color: AppColors.primary),
+              Icon(Icons.directions_car_outlined,
+                  size: 18, color: onDark ? Colors.white : AppColors.primary),
               if (!iconOnly) ...[
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          AppText.smallStrong.copyWith(color: AppColors.text)),
+                      style: AppText.smallStrong.copyWith(
+                          color: onDark ? Colors.white : AppColors.text)),
                 ),
               ],
-              const Icon(Icons.keyboard_arrow_down_rounded,
-                  size: 18, color: AppColors.textMuted),
+              Icon(Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color:
+                      onDark ? const Color(0xCCFFFFFF) : AppColors.textMuted),
             ]),
           ),
         ),
@@ -96,24 +101,28 @@ class CarPill extends ConsumerWidget {
   }
 }
 
-/// White pill or circle with a hairline border (header chips).
+/// White pill or circle with a hairline border (header chips). [onDark]
+/// makes it see-through white for a green band.
 class RoundSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
   final VoidCallback onTap;
+  final bool onDark;
   const RoundSurface(
       {super.key,
       required this.child,
       required this.padding,
-      required this.onTap});
+      required this.onTap,
+      this.onDark = false});
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: onDark ? const Color(0x26FFFFFF) : AppColors.surface,
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+            color: onDark ? const Color(0x40FFFFFF) : AppColors.border),
       ),
       child: Material(
         type: MaterialType.transparency,
