@@ -622,16 +622,20 @@ class _PopularServices extends StatelessWidget {
       LayoutBuilder(builder: (context, c) {
         const gap = AppSpace.md;
         final w = ((c.maxWidth - 2 * gap) / 3).floorToDouble();
-        return Wrap(
-          spacing: gap,
-          runSpacing: AppSpace.lg,
-          children: [
-            for (final s in services)
+        // One row, all three the same height (names wrap differently).
+        return IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (var i = 0; i < services.length; i++) ...[
+              if (i > 0) const SizedBox(width: gap),
               SizedBox(
                 width: w,
-                child: _ServiceTile(service: s, car: car, photo: photos[s.id]!),
+                child: _ServiceTile(
+                    service: services[i],
+                    car: car,
+                    photo: photos[services[i].id]!),
               ),
-          ],
+            ],
+          ]),
         );
       }),
     ]);
@@ -709,24 +713,28 @@ class _ServiceTile extends StatelessWidget {
             ),
           ]),
         ),
-        ExcludeSemantics(
-          child: InkWell(
-            onTap: open,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(s.listName,
-                        style:
-                            AppText.smallStrong.copyWith(color: AppColors.text),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
-                    Text(price,
-                        style: AppText.bodyStrong
-                            .copyWith(fontWeight: FontWeight.w800)),
-                  ]),
+        Expanded(
+          child: ExcludeSemantics(
+            child: InkWell(
+              onTap: open,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(s.listName,
+                          style: AppText.smallStrong
+                              .copyWith(color: AppColors.text),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis),
+                      // Prices line up at the bottom of every card.
+                      const Spacer(),
+                      const SizedBox(height: 2),
+                      Text(price,
+                          style: AppText.bodyStrong
+                              .copyWith(fontWeight: FontWeight.w800)),
+                    ]),
+              ),
             ),
           ),
         ),
@@ -755,44 +763,44 @@ class _MonthlyCard extends StatelessWidget {
         side: const BorderSide(color: Color(0xFFBFE3CC)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(children: [
-        Positioned(
-          right: -4,
-          bottom: -6,
-          child: Image.asset('assets/images/icon3d_calendar.png',
-              height: 116, cacheHeight: 348, excludeFromSemantics: true),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(18),
-          child: FractionallySizedBox(
-            widthFactor: 0.64,
-            alignment: Alignment.centerLeft,
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Pill('Best value', tone: PillTone.solid),
-              const SizedBox(height: AppSpace.sm),
-              Semantics(
-                header: true,
-                child: Text('Clean all month.\nBook once.',
-                    style: AppText.h3.copyWith(height: 1.15)),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text('Monthly plan · 3 full washes at your door',
-                  style: AppText.small.copyWith(color: AppColors.primaryDk)),
-              const SizedBox(height: AppSpace.sm),
-              Text.rich(
-                TextSpan(children: [
-                  TextSpan(text: price),
-                  TextSpan(text: ' /month', style: AppText.small),
-                ]),
-                style: AppText.priceSm,
-              ),
-              const SizedBox(height: AppSpace.md),
-              Wrap(
-                  spacing: AppSpace.sm,
-                  runSpacing: AppSpace.xs,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+      // The card opens all plans; the button books this one.
+      child: InkWell(
+        onTap: () => context.go('/services?cat=monthly'),
+        child: Stack(children: [
+          Positioned(
+            right: -4,
+            bottom: -6,
+            child: Image.asset('assets/images/icon3d_calendar.png',
+                height: 116, cacheHeight: 348, excludeFromSemantics: true),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: FractionallySizedBox(
+              widthFactor: 0.64,
+              alignment: Alignment.centerLeft,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Pill('Best value', tone: PillTone.solid),
+                    const SizedBox(height: AppSpace.sm),
+                    Semantics(
+                      header: true,
+                      child: Text('Clean all month.\nBook once.',
+                          style: AppText.h3.copyWith(height: 1.15)),
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Text('Monthly plan · 3 full washes at your door',
+                        style:
+                            AppText.small.copyWith(color: AppColors.primaryDk)),
+                    const SizedBox(height: AppSpace.sm),
+                    Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: price),
+                        TextSpan(text: ' /month', style: AppText.small),
+                      ]),
+                      style: AppText.priceSm,
+                    ),
+                    const SizedBox(height: AppSpace.md),
                     ElevatedButton(
                       onPressed: () {
                         HapticFeedback.lightImpact();
@@ -813,20 +821,11 @@ class _MonthlyCard extends StatelessWidget {
                         Icon(Icons.arrow_forward_rounded, size: 18),
                       ]),
                     ),
-                    TextButton(
-                      onPressed: () => context.go('/services?cat=monthly'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primaryDk,
-                        textStyle: AppText.smallStrong,
-                        minimumSize: const Size(0, 44),
-                      ),
-                      child: const Text('All plans'),
-                    ),
                   ]),
-            ]),
+            ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 }
