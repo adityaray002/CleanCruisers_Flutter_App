@@ -140,8 +140,8 @@ class RoundSurface extends StatelessWidget {
 /// heading. Tap to pick another address. With no address yet it reads
 /// "Set your car's location" in green, as a call to action.
 class ParkedAtLine extends ConsumerWidget {
-  /// Home header style: a small "Car parked at" line above, and the place
-  /// in bold ("Home, Janakpuri").
+  /// Home header style: the place in bold with a chevron ("Home ⌄") and
+  /// the address under it.
   final bool withOverline;
 
   /// White text for the Home green band (only with [withOverline]).
@@ -155,7 +155,11 @@ class ParkedAtLine extends ConsumerWidget {
     final place = sel == null ? null : addressLabelNames[sel.label]!;
     final color = sel == null ? AppColors.primary : AppColors.textMuted;
     if (withOverline) {
-      final short = sel == null ? 'Set location' : '$place · ${sel.address}';
+      // Two lines like the big home-service apps: the place in bold with a
+      // chevron ("Home ⌄"), the address under it.
+      final title = sel == null ? 'Set location' : place!;
+      final line = sel == null ? 'Where is your car parked?' : sel.address;
+      final strong = onDark ? Colors.white : AppColors.text;
       return Semantics(
         button: true,
         label: sel == null
@@ -171,28 +175,26 @@ class ParkedAtLine extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Car parked at',
-                        style: onDark
-                            ? AppText.caption
-                                .copyWith(color: const Color(0xCCFFFFFF))
-                            : AppText.caption),
-                    Row(children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
                       Flexible(
-                        child: Text(short,
+                        child: Text(title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppText.bodyStrong.copyWith(
-                                color: onDark
-                                    ? Colors.white
-                                    : sel == null
-                                        ? AppColors.primary
-                                        : AppColors.text,
-                                fontWeight: FontWeight.w800)),
+                            style: AppText.h3.copyWith(
+                                color: strong, fontWeight: FontWeight.w800)),
                       ),
+                      const SizedBox(width: 2),
                       Icon(Icons.keyboard_arrow_down_rounded,
-                          size: 18,
-                          color: onDark ? AppColors.brand : AppColors.primary),
+                          size: 20, color: strong),
                     ]),
+                    Text(line,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: onDark
+                                ? const Color(0xD9FFFFFF)
+                                : AppColors.textMuted)),
                   ]),
             ),
           ),

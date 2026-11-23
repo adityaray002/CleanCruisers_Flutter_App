@@ -21,28 +21,53 @@ import '../widgets/motion.dart';
 import '../widgets/ui.dart';
 
 /// Home (v4, one photo style like the big home-service apps). Top to bottom:
-/// 1. a green band: logo, where the car is parked, car pill, bell, the
-///    promise, "pay after" and the first-booking offer, and our expert,
+/// 1. a green band: where the car is parked ("Home ⌄" and the address), car
+///    pill, bell, the promise, "pay after" and the first-booking offer, and
+///    our expert. Once it scrolls away a white header takes its place,
 /// 2. two big cards on the band's edge: Car wash and Detailing,
 /// 3. the live booking, if any, or "Book again" with the last finished wash,
 /// 4. popular services: the same expert doing each job (3 per row),
 /// 5. the monthly plan,
 /// 6. new customers: how it works,
 /// 7. before / after photo (only when kBeforeAfterPhoto is set),
-/// 8. three facts and a chat tile, eco promise (only when confirmed).
+/// 8. "Relax, your car is in expert hands" with real facts and chat, eco
+///    promise (only when confirmed).
 ///
 /// All Home pictures come from one photo shoot (docs/HOME_ILLUSTRATION_BRIEF.md):
 /// the same expert, uniform, car and white studio.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   static const _gutter = AppSpace.lg;
 
-  static EdgeInsets _section({double top = 0, double bottom = AppSpace.xxl}) =>
-      EdgeInsets.fromLTRB(_gutter, top, _gutter, bottom);
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _scroll = ScrollController();
+
+  /// The green band has scrolled away: a white header takes its place.
+  final _scrolled = ValueNotifier(false);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _scroll.addListener(() => _scrolled.value = _scroll.offset > 64);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _scrolled.dispose();
+    super.dispose();
+  }
+
+  static EdgeInsets _section({double top = 0, double bottom = AppSpace.xxl}) =>
+      EdgeInsets.fromLTRB(HomeScreen._gutter, top, HomeScreen._gutter, bottom);
+
+  @override
+  Widget build(BuildContext context) {
     final mine =
         ref.watch(myApiBookingsProvider).valueOrNull ?? MyBookings.none;
     ref.watch(catalogProvider); // prices follow the server catalog
@@ -63,53 +88,93 @@ class HomeScreen extends ConsumerWidget {
             .firstOrNull
         : null;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Light status-bar icons over the green band.
-      value: SystemUiOverlayStyle.light
-          .copyWith(statusBarColor: Colors.transparent),
-      child: Scaffold(
-        backgroundColor: AppColors.surface,
-        // Dense cards: system text may grow, but only to 1.15x so the cards
-        // keep their shape on small phones.
-        body: MediaQuery.withClampedTextScaling(
-          maxScaleFactor: 1.15,
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: AppSpace.xxl),
-            children: [
-              _Top(hasUpdate: live != null, firstOffer: firstOffer, car: car),
-              const SizedBox(height: AppSpace.md),
-              if (live != null)
-                Padding(
-                  padding: _section(),
-                  child: _LiveBookingCard(booking: live),
-                )
-              else if (lastDone != null)
-                Padding(
-                  padding: _section(),
-                  child: _BookAgain(booking: lastDone),
+    final list = ListView(
+      controller: _scroll,
+      padding: const EdgeInsets.only(bottom: AppSpace.xxl),
+      children: [
+        _Top(hasUpdate: live != null, firstOffer: firstOffer, car: car),
+        const SizedBox(height: AppSpace.xl),
+        if (live != null)
+          Padding(
+            padding: _section(),
+            child: _LiveBookingCard(booking: live),
+          )
+        else if (lastDone != null)
+          Padding(
+            padding: _section(),
+            child: _BookAgain(booking: lastDone),
+          ),
+        Padding(
+          padding: _section(bottom: AppSpace.section),
+          child: Reveal(child: _PopularServices(car: car)),
+        ),
+        Padding(
+          padding: _section(bottom: AppSpace.section),
+          child: Reveal(child: _MonthlyCard(car: car)),
+        ),
+        if (isNew)
+          Padding(
+              padding: _section(bottom: AppSpace.section),
+              child: const _HowItWorks()),
+        if (kBeforeAfterPhoto != null)
+          Padding(
+            padding: _section(bottom: AppSpace.lg),
+            child: _BeforeAfter(photo: kBeforeAfterPhoto!),
+          ),
+        const _Trust(),
+        if (kEcoFriendly)
+          Padding(padding: _section(), child: const _EcoBanner()),
+      ],
+    );
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: _scrolled,
+      builder: (context, scrolled, _) => AnnotatedRegion<SystemUiOverlayStyle>(
+        // Light status-bar icons over the green band, dark over the white
+        // header.
+        value: (scrolled ? AppTheme.overlayDark : SystemUiOverlayStyle.light)
+            .copyWith(statusBarColor: Colors.transparent),
+        child: Scaffold(
+          backgroundColor: AppColors.surface,
+          // Dense cards: system text may grow, but only to 1.15x so the cards
+          // keep their shape on small phones.
+          body: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.15,
+            child: Stack(children: [
+              list,
+              if (scrolled)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: _StickyHeader(hasUpdate: live != null),
                 ),
-              Padding(
-                padding: _section(),
-                child: Reveal(child: _PopularServices(car: car)),
-              ),
-              Padding(
-                padding: _section(),
-                child: Reveal(child: _MonthlyCard(car: car)),
-              ),
-              if (isNew)
-                Padding(padding: _section(), child: const _HowItWorks()),
-              if (kBeforeAfterPhoto != null)
-                Padding(
-                  padding: _section(bottom: AppSpace.lg),
-                  child: _BeforeAfter(photo: kBeforeAfterPhoto!),
-                ),
-              Padding(padding: _section(), child: const _Facts()),
-              if (kEcoFriendly)
-                Padding(padding: _section(), child: const _EcoBanner()),
-            ],
+            ]),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The white header that stays on top once the green band scrolled away.
+class _StickyHeader extends StatelessWidget {
+  final bool hasUpdate;
+  const _StickyHeader({required this.hasUpdate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          HomeScreen._gutter,
+          MediaQuery.paddingOf(context).top + AppSpace.sm,
+          HomeScreen._gutter,
+          AppSpace.sm),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: _Header(hasUpdate: hasUpdate, onDark: false),
     );
   }
 }
@@ -153,7 +218,7 @@ class _Top extends StatelessWidget {
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _Header(hasUpdate: hasUpdate),
-          const SizedBox(height: AppSpace.lg),
+          const SizedBox(height: AppSpace.section),
           // The promise on the left, our expert on the right. He stands
           // on the cards' top edge (the crop at his waist hides under it).
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -191,11 +256,15 @@ class _Top extends StatelessWidget {
   }
 }
 
-// ── Header: logo, address, car pill, bell (on the green band) ────────────────
+// ── Header: where the car is, car pill, bell ─────────────────────────────────
 class _Header extends ConsumerStatefulWidget {
   /// A booking is in progress: the bell shows a dot and opens it.
   final bool hasUpdate;
-  const _Header({required this.hasUpdate});
+
+  /// On the green band (this one asks for an address once per launch);
+  /// false for the white sticky header.
+  final bool onDark;
+  const _Header({required this.hasUpdate, this.onDark = true});
 
   @override
   ConsumerState<_Header> createState() => _HeaderState();
@@ -209,7 +278,7 @@ class _HeaderState extends ConsumerState<_Header> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _askedThisLaunch) return;
+      if (!mounted || _askedThisLaunch || !widget.onDark) return;
       if (ref.read(addressBookProvider).items.isNotEmpty) {
         // Once per launch: addresses the server doesn't have yet go up.
         _askedThisLaunch = true;
@@ -228,17 +297,10 @@ class _HeaderState extends ConsumerState<_Header> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
-        ClipOval(
-          child: Image.asset('assets/images/logo.png',
-              width: 36,
-              height: 36,
-              cacheWidth: 144,
-              excludeFromSemantics: true),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(child: ParkedAtLine(withOverline: true, onDark: true)),
+        Expanded(
+            child: ParkedAtLine(withOverline: true, onDark: widget.onDark)),
         const SizedBox(width: AppSpace.sm),
-        const CarPill(onDark: true),
+        CarPill(onDark: widget.onDark),
         const SizedBox(width: AppSpace.sm),
         Semantics(
           button: true,
@@ -247,12 +309,13 @@ class _HeaderState extends ConsumerState<_Header> {
               : 'Booking updates',
           child: ExcludeSemantics(
             child: RoundSurface(
-              onDark: true,
+              onDark: widget.onDark,
               onTap: () => context.go('/bookings'),
               padding: const EdgeInsets.all(11),
               child: Stack(clipBehavior: Clip.none, children: [
-                const Icon(Icons.notifications_none_rounded,
-                    size: 20, color: Colors.white),
+                Icon(Icons.notifications_none_rounded,
+                    size: 20,
+                    color: widget.onDark ? Colors.white : AppColors.text),
                 if (widget.hasUpdate)
                   Positioned(
                     top: 0,
@@ -263,8 +326,11 @@ class _HeaderState extends ConsumerState<_Header> {
                       decoration: BoxDecoration(
                         color: AppColors.error,
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: AppColors.primary, width: 1.5),
+                        border: Border.all(
+                            color: widget.onDark
+                                ? AppColors.primary
+                                : AppColors.surface,
+                            width: 1.5),
                       ),
                     ),
                   ),
@@ -273,7 +339,7 @@ class _HeaderState extends ConsumerState<_Header> {
           ),
         ),
       ]),
-      if (coverage == Coverage.notCovered) ...[
+      if (widget.onDark && coverage == Coverage.notCovered) ...[
         const SizedBox(height: AppSpace.md),
         const NoticeBox(
           icon: Icons.wrong_location_outlined,
@@ -311,13 +377,12 @@ class _Promise extends StatelessWidget {
                   TextSpan(text: 'A spotless car,\n'),
                   TextSpan(
                       text: 'right where\n',
-                      style: TextStyle(
-                          color: AppColors.brand, fontWeight: FontWeight.w600)),
+                      style: TextStyle(color: AppColors.brand)),
                   TextSpan(text: 'it\'s parked'),
                 ]),
                 style: AppText.h1.copyWith(
                     color: Colors.white,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     height: 1.25,
                     letterSpacing: -0.2),
               ),
@@ -326,55 +391,55 @@ class _Promise extends StatelessWidget {
         ),
       ),
       const SizedBox(height: AppSpace.md),
-      Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
-        if (kPayAfterService)
-          const _HeroPill('Pay after the service', icon: Icons.check_rounded),
-        if (o != null)
-          Semantics(
-            button: true,
-            label: '$off your first booking. Code ${o.code}. Tap to copy',
-            child: ExcludeSemantics(
-              child: GestureDetector(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: o.code));
-                  showMessage(context, 'Code ${o.code} copied');
-                },
-                child: _HeroPill('$off · ${o.code}', bright: true),
+      Wrap(
+          spacing: AppSpace.md,
+          runSpacing: AppSpace.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (kPayAfterService)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.check_circle_rounded,
+                    size: 16, color: AppColors.brand),
+                const SizedBox(width: 6),
+                Text('Pay after the service',
+                    style: AppText.small.copyWith(
+                        color: const Color(0xE6FFFFFF),
+                        fontWeight: FontWeight.w500)),
+              ]),
+            if (o != null)
+              Semantics(
+                button: true,
+                label: '$off your first booking. Code ${o.code}. Tap to copy',
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: o.code));
+                      showMessage(context, 'Code ${o.code} copied');
+                    },
+                    child: _HeroPill('$off · ${o.code}'),
+                  ),
+                ),
               ),
-            ),
-          ),
-      ]),
+          ]),
     ]);
   }
 }
 
 class _HeroPill extends StatelessWidget {
   final String text;
-  final bool bright;
-  final IconData? icon;
-  const _HeroPill(this.text, {this.bright = false, this.icon});
+  const _HeroPill(this.text);
 
   @override
   Widget build(BuildContext context) {
-    final color = bright ? AppColors.ink : Colors.white;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: bright ? AppColors.brand : const Color(0x26FFFFFF),
+        color: AppColors.brand,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: bright ? null : Border.all(color: const Color(0x991DE874)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: bright ? AppColors.ink : AppColors.brand),
-          const SizedBox(width: AppSpace.xs),
-        ],
-        Flexible(
-          child: Text(text,
-              style: AppText.caption
-                  .copyWith(color: color, fontWeight: FontWeight.w800)),
-        ),
-      ]),
+      child: Text(text,
+          style: AppText.caption
+              .copyWith(color: AppColors.ink, fontWeight: FontWeight.w800)),
     );
   }
 }
@@ -437,81 +502,86 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: '$title. $line. From ${rupees(from)}. Book',
+      label: '$title. $line. From ${rupees(from)}',
       child: ExcludeSemantics(
         child: PressScale(
           child: Material(
-            color: AppColors.surface,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.lg),
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onTap();
-              },
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title and the 3D icon side by side: the icon never
-                      // sits under the button.
-                      Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(title, style: AppText.title),
-                                    const SizedBox(height: 2),
-                                    Text('from ${rupees(from)}',
-                                        style: AppText.caption.copyWith(
-                                            color: AppColors.textMuted)),
-                                  ]),
-                            ),
-                            // Takes 56 px of the row; the picture may use
-                            // the card's right padding too (the wide foam gun).
-                            SizedBox(
-                              width: 56,
-                              height: 52,
-                              child: OverflowBox(
-                                alignment: Alignment.centerLeft,
-                                maxWidth: 66,
-                                child: Image.asset(image,
-                                    height: iconHeight,
-                                    width: 66,
-                                    fit: BoxFit.contain,
-                                    cacheHeight: 156,
-                                    excludeFromSemantics: true),
+            child: Ink(
+              // White fading into a soft mint, like glass on the band.
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.white, Color(0xFFEAF7EF)],
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: const Color(0xB3FFFFFF)),
+              ),
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(title,
+                                          style: AppText.title
+                                              .copyWith(color: AppColors.text)),
+                                    ]),
                               ),
-                            ),
+                              // Takes 56 px of the row; the picture may use
+                              // the card's right padding too.
+                              SizedBox(
+                                width: 56,
+                                height: 52,
+                                child: OverflowBox(
+                                  alignment: Alignment.centerLeft,
+                                  maxWidth: 66,
+                                  child: Image.asset(image,
+                                      height: iconHeight,
+                                      width: 66,
+                                      fit: BoxFit.contain,
+                                      cacheHeight: 156,
+                                      excludeFromSemantics: true),
+                                ),
+                              ),
+                            ]),
+                        const SizedBox(height: AppSpace.sm),
+                        // The price as a light pill with an arrow: it reads
+                        // as "tap here" without a heavy button.
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(10, 5, 8, 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                            border: Border.all(color: const Color(0xFF9ED9B5)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text('from ${rupees(from)}',
+                                style: AppText.caption.copyWith(
+                                    color: AppColors.primaryDk,
+                                    fontWeight: FontWeight.w700)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_forward_rounded,
+                                size: 14, color: AppColors.primary),
                           ]),
-                      const SizedBox(height: AppSpace.sm),
-                      // The button: filled green, so it reads as "tap me".
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                          boxShadow: const [
-                            BoxShadow(
-                                color: Color(0x4015803D),
-                                blurRadius: 8,
-                                offset: Offset(0, 3)),
-                          ],
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Text('Book now',
-                              style: AppText.caption.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.arrow_forward_rounded,
-                              size: 14, color: Colors.white),
-                        ]),
-                      ),
-                    ]),
+                      ]),
+                ),
               ),
             ),
           ),
@@ -642,7 +712,8 @@ class _PopularServices extends StatelessWidget {
         Expanded(
           child: Semantics(
             header: true,
-            child: Text('Popular services', style: AppText.h2),
+            child: Text('Popular services',
+                style: AppText.h2.copyWith(fontWeight: FontWeight.w700)),
           ),
         ),
         TextButton(
@@ -657,7 +728,9 @@ class _PopularServices extends StatelessWidget {
           child: const Text('See all'),
         ),
       ]),
-      const SizedBox(height: AppSpace.sm),
+      Text('Done where your car is parked',
+          style: AppText.small.copyWith(color: AppColors.textMuted)),
+      const SizedBox(height: AppSpace.lg),
       LayoutBuilder(builder: (context, c) {
         const gap = AppSpace.md;
         final w = ((c.maxWidth - 2 * gap) / 3).floorToDouble();
@@ -693,146 +766,103 @@ class _ServiceTile extends StatelessWidget {
     final s = service;
     final from = car == null;
     final amount = rupees(from ? s.fromPrice : s.priceFor(car!));
-    void open() {
-      HapticFeedback.selectionClick();
-      context.push('/service/${s.id}');
-    }
 
-    void book() {
-      HapticFeedback.selectionClick();
-      context.push('/book/${s.id}${car == null ? '' : '?car=${car!.name}'}');
-    }
-
-    // A service, not a product: the photo shows the work and how long it
-    // takes; the footer gives the price and a "Book" link.
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Semantics(
-          button: true,
-          label: '${s.name}. Takes ${s.duration}. '
-              '${from ? 'From ' : ''}$amount. See details',
-          child: ExcludeSemantics(
-            child: InkWell(
-              onTap: open,
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: Stack(fit: StackFit.expand, children: [
-                        Image.asset(photo,
-                            fit: BoxFit.cover,
-                            cacheWidth: 360,
-                            excludeFromSemantics: true),
-                        Positioned(
-                          left: 6,
-                          bottom: 6,
-                          right: 6,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Container(
-                              padding: const EdgeInsets.fromLTRB(5, 2, 7, 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xE6FFFFFF),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.pill),
-                              ),
-                              child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.schedule_rounded,
-                                        size: 12, color: AppColors.primary),
-                                    const SizedBox(width: 3),
-                                    Flexible(
-                                      child: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(s.duration,
-                                            maxLines: 1,
-                                            style: AppText.caption.copyWith(
-                                                color: AppColors.text)),
-                                      ),
-                                    ),
-                                  ]),
-                            ),
+    // Like the big home-service apps: a photo with a small tag in its
+    // corner, then just the name and the price. The whole tile opens the
+    // service (with "Book" at the bottom of that page).
+    return Semantics(
+      button: true,
+      label: '${s.name}. Takes ${s.duration}. '
+          '${from ? 'From ' : ''}$amount. See details',
+      child: ExcludeSemantics(
+        child: Material(
+          color: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              context.push('/service/${s.id}');
+            },
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: Stack(fit: StackFit.expand, children: [
+                      Image.asset(photo,
+                          fit: BoxFit.cover,
+                          cacheWidth: 360,
+                          excludeFromSemantics: true),
+                      // How long it takes, tucked into the top-right corner.
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 96),
+                          padding: const EdgeInsets.fromLTRB(7, 3, 8, 4),
+                          decoration: const BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.only(
+                                bottomLeft: Radius.circular(AppRadius.sm)),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Icon(Icons.schedule_rounded,
+                                  size: 12, color: AppColors.textSubtle),
+                              const SizedBox(width: 3),
+                              Text(s.duration,
+                                  maxLines: 1,
+                                  style: AppText.caption.copyWith(
+                                      color: AppColors.textMuted,
+                                      fontWeight: FontWeight.w500)),
+                            ]),
                           ),
                         ),
-                      ]),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                s.category == ServiceCategory.wash
-                                    ? 'WASH'
-                                    : 'DETAILING',
-                                style: AppText.caption.copyWith(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8)),
-                            const SizedBox(height: 2),
-                            Text(
-                                _PopularServices.shortNames[s.id] ?? s.listName,
-                                style: AppText.smallStrong.copyWith(
-                                    color: AppColors.ink,
-                                    fontWeight: FontWeight.w800),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis),
-                          ]),
-                    ),
-                  ]),
-            ),
-          ),
-        ),
-        // The footer sits at the bottom of every tile, so the prices line up.
-        const Spacer(),
-        ExcludeSemantics(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text.rich(
-                TextSpan(children: [
-                  if (from) const TextSpan(text: 'from '),
-                  TextSpan(
-                      text: amount,
-                      style: AppText.smallStrong.copyWith(
-                          color: AppColors.text, fontWeight: FontWeight.w800)),
+                      ),
+                    ]),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_PopularServices.shortNames[s.id] ?? s.listName,
+                              style: AppText.body.copyWith(
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.25),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 6),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text.rich(
+                              TextSpan(children: [
+                                if (from) const TextSpan(text: 'from '),
+                                TextSpan(
+                                    text: amount,
+                                    style: AppText.bodyStrong.copyWith(
+                                        color: AppColors.text,
+                                        fontWeight: FontWeight.w700)),
+                              ]),
+                              maxLines: 1,
+                              style: AppText.caption
+                                  .copyWith(color: AppColors.textSubtle),
+                            ),
+                          ),
+                        ]),
+                  ),
                 ]),
-                maxLines: 1,
-                style: AppText.caption.copyWith(color: AppColors.textMuted),
-              ),
-            ),
           ),
         ),
-        Semantics(
-          button: true,
-          label: 'Book ${s.name}',
-          child: InkWell(
-            onTap: book,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 40),
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 2),
-              child: Row(children: [
-                Text('Book',
-                    style: AppText.smallStrong.copyWith(
-                        color: AppColors.primary, fontWeight: FontWeight.w800)),
-                const SizedBox(width: 2),
-                const Icon(Icons.arrow_forward_rounded,
-                    size: 16, color: AppColors.primary),
-              ]),
-            ),
-          ),
-        ),
-      ]),
+      ),
     );
   }
 }
@@ -949,41 +979,47 @@ class _HowItWorks extends StatelessWidget {
     final spoken = [
       for (var i = 0; i < _steps.length; i++) '${i + 1}, ${_steps[i]}'
     ].join('. ');
+    Widget dot(int i) => Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+              color: AppColors.primarySoft, shape: BoxShape.circle),
+          child: Text('${i + 1}',
+              style: AppText.smallStrong.copyWith(color: AppColors.primaryDk)),
+        );
     return Semantics(
       label: 'How it works: $spoken',
       child: ExcludeSemantics(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('HOW IT WORKS',
-              style: AppText.overline.copyWith(color: AppColors.textSubtle)),
-          const SizedBox(height: AppSpace.sm),
-          Row(children: [
-            for (var i = 0; i < _steps.length; i++) ...[
-              if (i > 0)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpace.xs),
-                  child: Icon(Icons.chevron_right_rounded,
-                      size: 16, color: AppColors.textSubtle),
-                ),
-              Flexible(
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                        color: AppColors.primarySoft, shape: BoxShape.circle),
-                    child: Text('${i + 1}',
-                        style: AppText.caption
-                            .copyWith(color: AppColors.primaryDk)),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(_steps[i],
-                        style: AppText.caption.copyWith(color: AppColors.text)),
-                  ),
+          Text('How it works',
+              style: AppText.h3.copyWith(color: AppColors.text)),
+          const SizedBox(height: AppSpace.lg),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (var i = 0; i < _steps.length; i++)
+              Expanded(
+                child: Column(children: [
+                  // The number, with a thin line to the next step.
+                  Row(children: [
+                    Expanded(
+                        child: Container(
+                            height: 1,
+                            color: i == 0 ? null : AppColors.border)),
+                    dot(i),
+                    Expanded(
+                        child: Container(
+                            height: 1,
+                            color: i == _steps.length - 1
+                                ? null
+                                : AppColors.border)),
+                  ]),
+                  const SizedBox(height: AppSpace.sm),
+                  Text(_steps[i],
+                      textAlign: TextAlign.center,
+                      style: AppText.caption.copyWith(
+                          color: AppColors.text, fontWeight: FontWeight.w500)),
                 ]),
               ),
-            ],
           ]),
         ]),
       ),
@@ -1031,59 +1067,70 @@ class _BeforeAfter extends StatelessWidget {
   }
 }
 
-// ── Trust strip: hours, since when, chat ─────────────────────────────────────
-/// One soft strip with three facts; the chat one opens WhatsApp.
-class _Facts extends StatelessWidget {
-  const _Facts();
+// ── Trust: a calm closing section with real facts ────────────────────────────
+/// "Relax, your car is in expert hands" and two facts from business_info
+/// (no ratings or customer counts until they are real data), then chat.
+class _Trust extends StatelessWidget {
+  const _Trust();
 
   @override
   Widget build(BuildContext context) {
-    Widget fact(IconData icon, String top, String bottom,
-            {VoidCallback? onTap}) =>
-        Expanded(
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
-              child: Column(children: [
-                Icon(icon, size: 20, color: AppColors.primary),
-                const SizedBox(height: AppSpace.xs),
-                Text(top,
-                    textAlign: TextAlign.center,
-                    style: AppText.smallStrong.copyWith(
-                        color: onTap == null
-                            ? AppColors.text
-                            : AppColors.primary)),
-                Text(bottom,
-                    textAlign: TextAlign.center, style: AppText.caption),
-              ]),
-            ),
-          ),
+    Widget fact(String top, String big, String bottom) => Expanded(
+          child: Column(children: [
+            Text(top,
+                textAlign: TextAlign.center,
+                style: AppText.caption.copyWith(
+                    color: AppColors.textSubtle, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 2),
+            Text(big,
+                textAlign: TextAlign.center,
+                style: AppText.h1.copyWith(color: AppColors.text)),
+            const SizedBox(height: 2),
+            Text(bottom,
+                textAlign: TextAlign.center,
+                style: AppText.caption.copyWith(
+                    color: AppColors.textSubtle, fontWeight: FontWeight.w500)),
+          ]),
         );
-    Widget divider() => Container(
-        width: 1,
-        margin: const EdgeInsets.symmetric(vertical: AppSpace.lg),
-        color: AppColors.border);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+      margin: const EdgeInsets.only(top: AppSpace.sm),
+      padding: const EdgeInsets.fromLTRB(HomeScreen._gutter, AppSpace.section,
+          HomeScreen._gutter, AppSpace.lg),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          fact(Icons.schedule_rounded, kDaysLabel, kHoursLabel),
-          if (kEstablished != null) ...[
-            divider(),
-            fact(Icons.verified_outlined, 'Since $kEstablished', kCityLabel),
-          ],
-          divider(),
-          fact(Icons.chat_bubble_outline_rounded, 'Chat with us', 'on WhatsApp',
-              onTap: () => openWhatsApp(context)),
-        ]),
-      ),
+      child: Column(children: [
+        Semantics(
+          header: true,
+          child: Text('Relax, your car is in\nexpert hands',
+              textAlign: TextAlign.center,
+              style: AppText.h2
+                  .copyWith(fontWeight: FontWeight.w600, height: 1.3)),
+        ),
+        const SizedBox(height: AppSpace.xxl),
+        IntrinsicHeight(
+          child: Row(children: [
+            if (kEstablished != null) ...[
+              fact('Serving since', kEstablished!, kCityLabel),
+              const VerticalDivider(
+                  width: 1, thickness: 1, color: AppColors.border),
+            ],
+            fact('Open', kDaysLabel.replaceFirst('All ', ''), kHoursLabel),
+          ]),
+        ),
+        const SizedBox(height: AppSpace.xl),
+        TextButton.icon(
+          onPressed: () => openWhatsApp(context),
+          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+          label: const Text('Questions? Chat with us on WhatsApp'),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            textStyle: AppText.smallStrong,
+            minimumSize: const Size(0, 44),
+          ),
+        ),
+      ]),
     );
   }
 }

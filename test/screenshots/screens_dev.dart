@@ -58,11 +58,17 @@ void main() {
     testWidgets(
         '${name}_fold',
         (t) => shoot(t, '${name}_fold', screen,
-            prefs: prefs, overrides: overrides, height: 800, interact: interact));
+            prefs: prefs,
+            overrides: overrides,
+            height: 800,
+            interact: interact));
     testWidgets(
         '${name}_full',
         (t) => shoot(t, '${name}_full', screen,
-            prefs: prefs, overrides: overrides, height: full, interact: interact));
+            prefs: prefs,
+            overrides: overrides,
+            height: full,
+            interact: interact));
   }
 
   // Test build (--dart-define=FAKE_SERVER=true): fake login, OTP 123456.
@@ -76,10 +82,13 @@ void main() {
       interact: (t) => t.enterText(find.byType(TextField), '4821'));
   both('name', const NameScreen(), 800);
   both('login_test', const LoginScreen(), 800, overrides: testBuild);
-  both('otp_test', const OtpScreen(session: OtpSession(phone: '9876543210')), 800,
+  both('otp_test', const OtpScreen(session: OtpSession(phone: '9876543210')),
+      800,
       overrides: testBuild);
+
   /// [screen] once the fixture customer has a booking in [state].
-  void withBooking(String name, Fx state, Widget Function(String ref) screen, double full,
+  void withBooking(
+      String name, Fx state, Widget Function(String ref) screen, double full,
       {Future<void> Function(WidgetTester)? interact}) {
     final api = fixtureApi();
     both(name, AfterBooking(api: api, state: state, then: screen), full,
@@ -101,31 +110,37 @@ void main() {
   // Booking, three steps: car + address come from the profile.
   // On the test-build server: times and the bill come from it.
   both('book', const BookingFlowScreen(serviceId: 'wash-full'), 1200,
-      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+      prefs: profile,
+      overrides: fakeOverrides(fixtureApi()), interact: (t) async {
     await t.tap(find.text('Roof cleaning'));
     await t.pump(const Duration(milliseconds: 300));
   });
   both('book_slot', const BookingFlowScreen(serviceId: 'wash-full'), 1600,
-      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+      prefs: profile,
+      overrides: fakeOverrides(fixtureApi()), interact: (t) async {
     await next(t);
     await toSlot(t);
   });
   both('book_review', const BookingFlowScreen(serviceId: 'wash-full'), 1500,
-      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+      prefs: profile,
+      overrides: fakeOverrides(fixtureApi()), interact: (t) async {
     await t.tap(find.text('Roof cleaning'));
     await next(t);
     await toSlot(t);
     await next(t);
   });
   both('book_plan', const BookingFlowScreen(serviceId: 'monthly-3'), 1500,
-      prefs: profile, overrides: fakeOverrides(fixtureApi()), interact: (t) async {
+      prefs: profile,
+      overrides: fakeOverrides(fixtureApi()), interact: (t) async {
     await toSlot(t);
     await next(t);
   });
   both('onboard_address', const AddressScreen(), 1000);
   final sentApi = fixtureApi();
-  both('sent',
-      AfterRequest(api: sentApi, then: (ref) => BookingSentScreen(bookingRef: ref)),
+  both(
+      'sent',
+      AfterRequest(
+          api: sentApi, then: (ref) => BookingSentScreen(bookingRef: ref)),
       1000,
       prefs: profile,
       overrides: fakeOverrides(sentApi));
@@ -147,11 +162,16 @@ void main() {
     ('detail_cancel_asked', Fx.cancelAsked),
     ('detail_missed', Fx.missed),
   ]) {
-    withBooking(name, state, (ref) => BookingDetailScreen(bookingRef: ref), 1900);
+    withBooking(
+        name, state, (ref) => BookingDetailScreen(bookingRef: ref), 1900);
   }
   final toolsApi = fixtureApi();
-  both('test_tools',
-      AfterBooking(api: toolsApi, state: Fx.confirmed, then: (_) => const TestToolsScreen()),
+  both(
+      'test_tools',
+      AfterBooking(
+          api: toolsApi,
+          state: Fx.confirmed,
+          then: (_) => const TestToolsScreen()),
       1400,
       prefs: profile,
       overrides: fakeOverrides(toolsApi));
@@ -159,7 +179,7 @@ void main() {
   withBooking('addresses', Fx.confirmed, (_) => const AddressesScreen(), 1000);
   both('address_sheet', const HomeScreen(), 800, prefs: profile,
       interact: (t) async {
-    await t.tap(find.text('Car parked at'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Car parked at')));
     await t.pumpAndSettle();
   });
   withBooking('wallet', Fx.completed, (_) => const WalletScreen(), 1600);
@@ -169,8 +189,10 @@ void main() {
     final ref = await fixtureBooking(planApi, Fx.requested);
     final a = (await planApi.addresses()).first;
     final r = await planApi.buyPlan(
-        clientRef: 'PL-S', planId: 'monthly-3',
-        car: const ApiCar(CarType.hatchback, 'White Swift'), addressId: a.id!,
+        clientRef: 'PL-S',
+        planId: 'monthly-3',
+        car: const ApiCar(CarType.hatchback, 'White Swift'),
+        addressId: a.id!,
         firstVisit: SlotPick(addDays(dateOnly(DateTime.now()), 2), 9 * 60));
     planApi.adminConfirm(r.booking.ref);
     planApi.adminOnTheWay(r.booking.ref);
@@ -178,8 +200,15 @@ void main() {
     planApi.adminComplete(r.booking.ref);
     return ref;
   }
+
   final planReady = planSetup();
-  both('plans', FutureBuilder(future: planReady,
-      builder: (_, s) => s.hasData ? const PlansScreen() : const SizedBox()), 1000,
-      prefs: profile, overrides: fakeOverrides(planApi));
+  both(
+      'plans',
+      FutureBuilder(
+          future: planReady,
+          builder: (_, s) =>
+              s.hasData ? const PlansScreen() : const SizedBox()),
+      1000,
+      prefs: profile,
+      overrides: fakeOverrides(planApi));
 }
