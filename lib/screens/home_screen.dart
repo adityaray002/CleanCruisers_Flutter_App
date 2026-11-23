@@ -464,6 +464,9 @@ class _ActionCards extends StatelessWidget {
             line: 'Outside and inside',
             from: cheapestIn(ServiceCategory.wash),
             image: 'assets/images/icon3d_wash.png',
+            // The foam cannon is long and thin: give it more width.
+            iconWidth: 116,
+            iconHeight: 84,
             onTap: () => context.go('/services?cat=wash'),
           ),
         ),
@@ -476,7 +479,7 @@ class _ActionCards extends StatelessWidget {
             image: 'assets/images/icon3d_polish.png',
             // The polisher is compact and heavy; a bit smaller it weighs
             // the same as the long, thin foam cannon.
-            iconHeight: 46,
+            iconHeight: 76,
             onTap: () => context.go('/services?cat=detailing'),
           ),
         ),
@@ -489,14 +492,15 @@ class _ActionCard extends StatelessWidget {
   final String title, line, image;
   final int from;
   final VoidCallback onTap;
-  final double iconHeight;
+  final double iconHeight, iconWidth;
   const _ActionCard({
     required this.title,
     required this.line,
     required this.from,
     required this.image,
     required this.onTap,
-    this.iconHeight = 52,
+    this.iconHeight = 72,
+    this.iconWidth = 92,
   });
 
   @override
@@ -540,70 +544,54 @@ class _ActionCard extends StatelessWidget {
                     HapticFeedback.selectionClick();
                     onTap();
                   },
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(title,
-                                            style: AppText.title.copyWith(
-                                                color: AppColors.text)),
-                                      ]),
-                                ),
-                                // Takes 56 px of the row; the picture may use
-                                // the card's right padding too.
-                                SizedBox(
-                                  width: 56,
-                                  height: 52,
-                                  child: OverflowBox(
-                                    alignment: Alignment.centerLeft,
-                                    maxWidth: 66,
-                                    child: Image.asset(image,
-                                        height: iconHeight,
-                                        width: 66,
-                                        fit: BoxFit.contain,
-                                        cacheHeight: 156,
-                                        excludeFromSemantics: true),
-                                  ),
-                                ),
-                              ]),
-                          const SizedBox(height: AppSpace.sm),
-                          // The price as a light pill with an arrow: it reads
-                          // as "tap here" without a heavy button.
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.pill),
-                              boxShadow: const [
-                                BoxShadow(
-                                    color: Color(0x4015803D),
-                                    blurRadius: 6,
-                                    offset: Offset(0, 3)),
-                              ],
+                  // Like Pronto's cards: the title and price top left, a
+                  // round "go" button bottom left, and the 3D icon big in the
+                  // bottom-right corner, running off the card's edge.
+                  child: Stack(children: [
+                    Positioned(
+                      right: -6,
+                      bottom: -6,
+                      child: Image.asset(image,
+                          width: iconWidth,
+                          height: iconHeight,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.bottomRight,
+                          cacheHeight: 240,
+                          excludeFromSemantics: true),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title,
+                                style: AppText.title
+                                    .copyWith(color: AppColors.text)),
+                            const SizedBox(height: 2),
+                            Text('from ${rupees(from)}',
+                                style: AppText.caption.copyWith(
+                                    color: AppColors.textMuted,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(height: AppSpace.xxl),
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Color(0x5515803D),
+                                      blurRadius: 8,
+                                      offset: Offset(0, 3)),
+                                ],
+                              ),
+                              child: const Icon(Icons.arrow_forward_rounded,
+                                  size: 18, color: Colors.white),
                             ),
-                            child:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text('from ${rupees(from)}',
-                                  style: AppText.caption.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800)),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_forward_rounded,
-                                  size: 14, color: Colors.white),
-                            ]),
-                          ),
-                        ]),
-                  ),
+                          ]),
+                    ),
+                  ]),
                 ),
               ),
             ),
