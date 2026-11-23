@@ -153,7 +153,7 @@ class _Top extends StatelessWidget {
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _Header(hasUpdate: hasUpdate),
-          const SizedBox(height: AppSpace.md),
+          const SizedBox(height: AppSpace.section),
           // The promise on the left, our expert on the right. He stands
           // on the cards' top edge (the crop at his waist hides under it).
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -166,9 +166,9 @@ class _Top extends StatelessWidget {
             Transform.translate(
               offset: const Offset(AppSpace.sm, AppSpace.md),
               child: Image.asset('assets/images/pro_hero.png',
-                  height: 196,
+                  height: 150,
                   fit: BoxFit.contain,
-                  cacheHeight: 600,
+                  cacheHeight: 492,
                   excludeFromSemantics: true),
             ),
           ]),
@@ -299,14 +299,14 @@ class _Promise extends StatelessWidget {
                   TextSpan(
                       text: 'right where\n',
                       style: TextStyle(
-                          color: AppColors.brand, fontWeight: FontWeight.w800)),
+                          color: AppColors.brand, fontWeight: FontWeight.w600)),
                   TextSpan(text: 'it\'s parked'),
                 ]),
-                style: AppText.h1.copyWith(
+                style: AppText.h2.copyWith(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                    letterSpacing: -0.3),
+                    fontWeight: FontWeight.w500,
+                    height: 1.3,
+                    letterSpacing: -0.2),
               ),
             ),
           ),
@@ -425,39 +425,24 @@ class _ActionCard extends StatelessWidget {
           child: Material(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
-            shadowColor: Colors.transparent,
             child: InkWell(
               onTap: () {
                 HapticFeedback.selectionClick();
                 onTap();
               },
-              // Text top left, the 3D icon big in the bottom-right corner,
-              // and the price as the button, bottom left.
+              // Compact like a button: title and line on top, the price
+              // button bottom left, the 3D icon whole in the bottom right.
               child: Stack(children: [
                 Positioned(
-                  right: -18,
-                  bottom: -22,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(colors: [
-                        Color(0x4015803D),
-                        Color(0x0015803D),
-                      ]),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: -6,
-                  bottom: -4,
+                  right: AppSpace.sm,
+                  bottom: AppSpace.sm,
                   child: Image.asset(image,
-                      height: 92,
+                      height: 60,
+                      width: 64,
                       fit: BoxFit.contain,
-                      cacheHeight: 276,
+                      alignment: Alignment.bottomRight,
+                      cacheHeight: 180,
                       excludeFromSemantics: true),
                 ),
                 Padding(
@@ -465,12 +450,10 @@ class _ActionCard extends StatelessWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: AppText.h3),
-                        const SizedBox(height: 2),
-                        Text(line, style: AppText.small, maxLines: 2),
-                        const SizedBox(height: 56),
+                        Text(title, style: AppText.title),
+                        const SizedBox(height: AppSpace.xl),
                         Container(
-                          padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
+                          padding: const EdgeInsets.fromLTRB(8, 4, 6, 4),
                           decoration: BoxDecoration(
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -483,7 +466,7 @@ class _ActionCard extends StatelessWidget {
                                     fontWeight: FontWeight.w800)),
                             const SizedBox(width: 2),
                             const Icon(Icons.arrow_forward_rounded,
-                                size: 14, color: AppColors.primary),
+                                size: 13, color: AppColors.primary),
                           ]),
                         ),
                       ]),
@@ -593,8 +576,9 @@ class _PopularServices extends StatelessWidget {
   };
 
   /// Three on Home, one of each kind (the rest are one tap away in "See all"):
-  /// the most booked wash, the cheapest, and the full detailing.
-  static const _popular = ['wash-full', 'wash-bucket', 'full-package'];
+  /// the most booked wash, seat dry cleaning and the full detailing. Their
+  /// photos look different (foam door, seat close-up, finished car).
+  static const _popular = ['wash-full', 'dry-cleaning', 'full-package'];
 
   @override
   Widget build(BuildContext context) {
@@ -727,8 +711,6 @@ class _ServiceTile extends StatelessWidget {
                               .copyWith(color: AppColors.text),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis),
-                      // Prices line up at the bottom of every card.
-                      const Spacer(),
                       const SizedBox(height: 2),
                       Text(price,
                           style: AppText.bodyStrong
