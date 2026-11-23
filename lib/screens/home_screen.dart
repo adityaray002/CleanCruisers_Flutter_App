@@ -153,23 +153,35 @@ class _Top extends StatelessWidget {
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _Header(hasUpdate: hasUpdate),
-          const SizedBox(height: AppSpace.section),
+          const SizedBox(height: AppSpace.lg),
           // The promise on the left, our expert on the right. He stands
           // on the cards' top edge (the crop at his waist hides under it).
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.xl),
+                padding: const EdgeInsets.only(bottom: AppSpace.lg),
                 child: _Promise(firstOffer: firstOffer),
               ),
             ),
+            // He takes less height than he shows: his head rises into the
+            // space under the header, so the hero stays short and Popular
+            // services fit on the first screen.
             Transform.translate(
-              offset: const Offset(AppSpace.sm, AppSpace.md),
-              child: Image.asset('assets/images/pro_hero.png',
-                  height: 180,
-                  fit: BoxFit.contain,
-                  cacheHeight: 540,
-                  excludeFromSemantics: true),
+              offset: const Offset(AppSpace.sm, AppSpace.lg),
+              child: SizedBox(
+                width: 117,
+                height: 148,
+                child: OverflowBox(
+                  minHeight: 172,
+                  maxHeight: 172,
+                  alignment: Alignment.bottomCenter,
+                  child: Image.asset('assets/images/pro_hero.png',
+                      height: 172,
+                      fit: BoxFit.contain,
+                      cacheHeight: 540,
+                      excludeFromSemantics: true),
+                ),
+              ),
             ),
           ]),
           _ActionCards(car: car),
@@ -611,7 +623,7 @@ class _PopularServices extends StatelessWidget {
     'wash-exterior': 'Outside wash',
     'wash-interior': 'Inside clean',
     'wash-bucket': 'Bucket wash',
-    'dry-cleaning': 'Interior dry cleaning',
+    'dry-cleaning': 'Dry cleaning',
     'rubbing-exterior': 'Rubbing',
     '3m-wax-exterior': '3M wax',
     'full-package': 'Full detailing',
@@ -706,7 +718,7 @@ class _ServiceTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     AspectRatio(
-                      aspectRatio: 1,
+                      aspectRatio: 4 / 3,
                       child: Stack(fit: StackFit.expand, children: [
                         Image.asset(photo,
                             fit: BoxFit.cover,
@@ -777,7 +789,7 @@ class _ServiceTile extends StatelessWidget {
         const Spacer(),
         ExcludeSemantics(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -801,8 +813,8 @@ class _ServiceTile extends StatelessWidget {
           child: InkWell(
             onTap: book,
             child: Container(
-              constraints: const BoxConstraints(minHeight: 44),
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+              constraints: const BoxConstraints(minHeight: 40),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 2),
               child: Row(children: [
                 Text('Book',
                     style: AppText.smallStrong.copyWith(
