@@ -465,8 +465,8 @@ class _ActionCards extends StatelessWidget {
             from: cheapestIn(ServiceCategory.wash),
             image: 'assets/images/icon3d_wash.png',
             // The foam cannon is long and thin: give it more width.
-            iconWidth: 116,
-            iconHeight: 84,
+            iconWidth: 100,
+            iconHeight: 74,
             onTap: () => context.go('/services?cat=wash'),
           ),
         ),
@@ -479,7 +479,7 @@ class _ActionCards extends StatelessWidget {
             image: 'assets/images/icon3d_polish.png',
             // The polisher is compact and heavy; a bit smaller it weighs
             // the same as the long, thin foam cannon.
-            iconHeight: 76,
+            iconHeight: 66,
             onTap: () => context.go('/services?cat=detailing'),
           ),
         ),
@@ -499,8 +499,8 @@ class _ActionCard extends StatelessWidget {
     required this.from,
     required this.image,
     required this.onTap,
-    this.iconHeight = 72,
-    this.iconWidth = 92,
+    this.iconHeight = 62,
+    this.iconWidth = 80,
   });
 
   @override
@@ -559,37 +559,48 @@ class _ActionCard extends StatelessWidget {
                           cacheHeight: 240,
                           excludeFromSemantics: true),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(title,
-                                style: AppText.title
-                                    .copyWith(color: AppColors.text)),
-                            const SizedBox(height: 2),
-                            Text('from ${rupees(from)}',
-                                style: AppText.caption.copyWith(
-                                    color: AppColors.textMuted,
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(height: AppSpace.xxl),
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: Color(0x5515803D),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 3)),
-                                ],
+                    // A wide, low card like Pronto's: title and price on top,
+                    // a small round arrow at the bottom.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 96),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                        child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(title,
+                                        style: AppText.title
+                                            .copyWith(color: AppColors.text)),
+                                    const SizedBox(height: 2),
+                                    Text('from ${rupees(from)}',
+                                        style: AppText.caption.copyWith(
+                                            color: AppColors.textMuted,
+                                            fontWeight: FontWeight.w600)),
+                                  ]),
+                              const SizedBox(height: AppSpace.sm),
+                              // A small round "go" button, clear of the icon.
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color: Color(0x5515803D),
+                                        blurRadius: 6,
+                                        offset: Offset(0, 2)),
+                                  ],
+                                ),
+                                child: const Icon(Icons.arrow_forward_rounded,
+                                    size: 16, color: Colors.white),
                               ),
-                              child: const Icon(Icons.arrow_forward_rounded,
-                                  size: 18, color: Colors.white),
-                            ),
-                          ]),
+                            ]),
+                      ),
                     ),
                   ]),
                 ),
