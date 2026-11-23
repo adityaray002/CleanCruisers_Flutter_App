@@ -41,8 +41,9 @@ const String? kBeforeAfterPhoto = null;
 
 // The last picture on Home, under "Relax, your car is in expert hands": our
 // expert, arms crossed, in front of a line-drawn city (prompt in
-// docs/HOME_ILLUSTRATION_BRIEF.md). null hides it until the photo exists.
-const String? kTrustPhoto = null;
+// docs/HOME_ILLUSTRATION_BRIEF.md; the badge is the real logo pasted on).
+// null hides it.
+const String? kTrustPhoto = 'assets/images/trust_expert.jpg';
 
 // TODO(business): set to true only once the team really uses water-saving
 // methods and eco-friendly products. Shows the green banner on Home.
