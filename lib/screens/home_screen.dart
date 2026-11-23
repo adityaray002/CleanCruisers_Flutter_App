@@ -434,18 +434,25 @@ class _ActionCard extends StatelessWidget {
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.lg),
             child: Ink(
+              // Raised like a button: white to mint, a green edge at the
+              // bottom (the "lip") and a soft green shadow under it.
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [AppColors.surface, Color(0xFFE6F6EC)],
+                ),
                 borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: const Color(0xFFD3EEDD)),
                 boxShadow: const [
                   BoxShadow(
-                      color: Color(0x1F101828),
-                      blurRadius: 30,
-                      offset: Offset(0, 10)),
+                      color: Color(0xFFB9E2C8),
+                      blurRadius: 0,
+                      offset: Offset(0, 4)),
                   BoxShadow(
-                      color: Color(0x0F101828),
-                      blurRadius: 2,
-                      offset: Offset(0, 1)),
+                      color: Color(0x2E15803D),
+                      blurRadius: 24,
+                      offset: Offset(0, 12)),
                 ],
               ),
               child: InkWell(
@@ -459,6 +466,43 @@ class _ActionCard extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   child: Stack(children: [
+                    // Soft light behind the icon.
+                    Positioned(
+                      right: -18,
+                      bottom: -22,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(colors: [
+                            Color(0x6615803D),
+                            Color(0x0015803D),
+                          ]),
+                        ),
+                      ),
+                    ),
+                    // "Tap me": a round green arrow, bottom left.
+                    Positioned(
+                      left: 14,
+                      bottom: 14,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                                color: Color(0x5515803D),
+                                blurRadius: 10,
+                                offset: Offset(0, 4)),
+                          ],
+                        ),
+                        child: const Icon(Icons.arrow_forward_rounded,
+                            size: 20, color: Colors.white),
+                      ),
+                    ),
                     Positioned(
                       right: -6,
                       bottom: -4,
