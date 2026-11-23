@@ -78,3 +78,18 @@ mint #1DE874 and white, soft shadow below, plain pure white background, centred,
 
 Put them in `assets/images/` with the names above (JPG or PNG on white). We cut them out, colour-match them,
 and wire them into the new Home (mockup: `docs/home_redesign_mockup.jpg`).
+
+## Trust photo (bottom of Home)
+
+`trust_expert.png`, shown under "Relax, your car is in expert hands" once
+`kTrustPhoto` in `lib/data/business_info.dart` points to it. Attach
+`assets/images/pro_hero.png` as the reference for the same man and uniform.
+
+> Same man, same face, same dark-green polo with the round CleanCruisers
+> badge on the chest and the same dark-green cap as the reference photo.
+> Waist-up, facing the camera, arms crossed, calm confident smile. Behind
+> him a light-grey line drawing of a city: a few apartment blocks and a
+> parked hatchback, thin grey lines only, no colour, fading into white at the
+> edges. Pure white background #FFFFFF, soft studio light, photo-real person,
+> no text, no other logos. Wide 3:2, the man in the centre, his body cut at
+> the bottom edge of the image.

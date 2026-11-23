@@ -90,7 +90,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final list = ListView(
       controller: _scroll,
-      padding: const EdgeInsets.only(bottom: AppSpace.xxl),
+      padding: const EdgeInsets.only(
+          bottom: kTrustPhoto == null && !kEcoFriendly ? AppSpace.xxl : 0),
       children: [
         _Top(hasUpdate: live != null, firstOffer: firstOffer, car: car),
         const SizedBox(height: AppSpace.xl),
@@ -505,82 +506,104 @@ class _ActionCard extends StatelessWidget {
       label: '$title. $line. From ${rupees(from)}',
       child: ExcludeSemantics(
         child: PressScale(
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            clipBehavior: Clip.antiAlias,
-            child: Ink(
-              // White fading into a soft mint, like glass on the band.
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.white, Color(0xFFEAF7EF)],
+          // A raised key: a darker mint edge under the card and a soft
+          // shadow, so it looks like something to press.
+          child: Container(
+            padding: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFA9DDBE),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              boxShadow: const [
+                BoxShadow(
+                    color: Color(0x40052E16),
+                    blurRadius: 18,
+                    offset: Offset(0, 8)),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              clipBehavior: Clip.antiAlias,
+              child: Ink(
+                // White fading into a soft mint, like glass on the band.
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.white, Color(0xFFEAF7EF)],
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: const Color(0xB3FFFFFF)),
                 ),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: const Color(0xB3FFFFFF)),
-              ),
-              child: InkWell(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onTap();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(title,
-                                          style: AppText.title
-                                              .copyWith(color: AppColors.text)),
-                                    ]),
-                              ),
-                              // Takes 56 px of the row; the picture may use
-                              // the card's right padding too.
-                              SizedBox(
-                                width: 56,
-                                height: 52,
-                                child: OverflowBox(
-                                  alignment: Alignment.centerLeft,
-                                  maxWidth: 66,
-                                  child: Image.asset(image,
-                                      height: iconHeight,
-                                      width: 66,
-                                      fit: BoxFit.contain,
-                                      cacheHeight: 156,
-                                      excludeFromSemantics: true),
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onTap();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(title,
+                                            style: AppText.title.copyWith(
+                                                color: AppColors.text)),
+                                      ]),
                                 ),
-                              ),
+                                // Takes 56 px of the row; the picture may use
+                                // the card's right padding too.
+                                SizedBox(
+                                  width: 56,
+                                  height: 52,
+                                  child: OverflowBox(
+                                    alignment: Alignment.centerLeft,
+                                    maxWidth: 66,
+                                    child: Image.asset(image,
+                                        height: iconHeight,
+                                        width: 66,
+                                        fit: BoxFit.contain,
+                                        cacheHeight: 156,
+                                        excludeFromSemantics: true),
+                                  ),
+                                ),
+                              ]),
+                          const SizedBox(height: AppSpace.sm),
+                          // The price as a light pill with an arrow: it reads
+                          // as "tap here" without a heavy button.
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Color(0x4015803D),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 3)),
+                              ],
+                            ),
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              Text('from ${rupees(from)}',
+                                  style: AppText.caption.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800)),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_forward_rounded,
+                                  size: 14, color: Colors.white),
                             ]),
-                        const SizedBox(height: AppSpace.sm),
-                        // The price as a light pill with an arrow: it reads
-                        // as "tap here" without a heavy button.
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(10, 5, 8, 5),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                            border: Border.all(color: const Color(0xFF9ED9B5)),
                           ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Text('from ${rupees(from)}',
-                                style: AppText.caption.copyWith(
-                                    color: AppColors.primaryDk,
-                                    fontWeight: FontWeight.w700)),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.arrow_forward_rounded,
-                                size: 14, color: AppColors.primary),
-                          ]),
-                        ),
-                      ]),
+                        ]),
+                  ),
                 ),
               ),
             ),
@@ -692,6 +715,18 @@ class _PopularServices extends StatelessWidget {
   /// photos look different (foam door, seat close-up, finished car).
   static const _popular = ['wash-full', 'dry-cleaning', 'full-package'];
 
+  /// What you get, in a few words, under the name on the tiles.
+  static const whatYouGet = {
+    'wash-full': 'Foam + vacuum',
+    'wash-exterior': 'Foam + wheels',
+    'wash-interior': 'Vacuum + dash',
+    'wash-bucket': 'Hand wash',
+    'dry-cleaning': 'Seats + roof',
+    'rubbing-exterior': 'Light marks',
+    '3m-wax-exterior': 'Gloss + shield',
+    'full-package': 'Rubbing + wax',
+  };
+
   /// Short names for the small tiles (the full name is on the service page).
   static const shortNames = {
     'wash-full': 'Full wash',
@@ -728,9 +763,7 @@ class _PopularServices extends StatelessWidget {
           child: const Text('See all'),
         ),
       ]),
-      Text('Done where your car is parked',
-          style: AppText.small.copyWith(color: AppColors.textMuted)),
-      const SizedBox(height: AppSpace.lg),
+      const SizedBox(height: AppSpace.md),
       LayoutBuilder(builder: (context, c) {
         const gap = AppSpace.md;
         final w = ((c.maxWidth - 2 * gap) / 3).floorToDouble();
@@ -828,36 +861,67 @@ class _ServiceTile extends StatelessWidget {
                     ]),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                    padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(_PopularServices.shortNames[s.id] ?? s.listName,
                               style: AppText.body.copyWith(
                                   color: AppColors.text,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   height: 1.25),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 2),
+                          // One line; shrinks a little on narrow tiles.
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
-                            child: Text.rich(
-                              TextSpan(children: [
-                                if (from) const TextSpan(text: 'from '),
-                                TextSpan(
-                                    text: amount,
-                                    style: AppText.bodyStrong.copyWith(
-                                        color: AppColors.text,
-                                        fontWeight: FontWeight.w700)),
-                              ]),
-                              maxLines: 1,
-                              style: AppText.caption
-                                  .copyWith(color: AppColors.textSubtle),
-                            ),
+                            child: Text(
+                                _PopularServices.whatYouGet[s.id] ?? s.tagline,
+                                maxLines: 1,
+                                style: AppText.caption.copyWith(
+                                    color: AppColors.textSubtle,
+                                    fontWeight: FontWeight.w500)),
                           ),
                         ]),
+                  ),
+                  // Price at the bottom of every tile, so they line up,
+                  // with a small arrow that says "open".
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 0, 8, 10),
+                    child: Row(children: [
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text.rich(
+                            TextSpan(children: [
+                              if (from) const TextSpan(text: 'from '),
+                              TextSpan(
+                                  text: amount,
+                                  style: AppText.bodyStrong.copyWith(
+                                      color: AppColors.text,
+                                      fontWeight: FontWeight.w800)),
+                            ]),
+                            maxLines: 1,
+                            style: AppText.caption
+                                .copyWith(color: AppColors.textSubtle),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: const BoxDecoration(
+                            color: AppColors.primarySoft,
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.arrow_forward_rounded,
+                            size: 14, color: AppColors.primary),
+                      ),
+                    ]),
                   ),
                 ]),
           ),
@@ -868,8 +932,8 @@ class _ServiceTile extends StatelessWidget {
 }
 
 // ── Monthly plan ─────────────────────────────────────────────────────────────
-/// The 3-wash plan in the brand green (like the top band), with the 3D
-/// calendar and one mint "Book plan" button. The price follows the car.
+/// The 3-wash plan as a light mint card: a small green tag, the promise,
+/// the price, one button, and the 3D calendar. The price follows the car.
 class _MonthlyCard extends StatelessWidget {
   final CarType? car;
   const _MonthlyCard({required this.car});
@@ -878,85 +942,115 @@ class _MonthlyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final plan = serviceById('monthly-3')!;
     final amount = car == null ? plan.fromPrice : plan.priceFor(car!);
-    final price = '${car == null ? 'From ' : ''}${rupees(amount)}';
+    void open() => context.go('/services?cat=monthly');
 
     return Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(AppRadius.lg),
       clipBehavior: Clip.antiAlias,
       child: Ink(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [Color(0xFF1A8F4C), AppColors.primary, AppColors.primaryDk],
-            stops: [0, 0.45, 1],
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF2FBF5), Color(0xFFDDF4E5)],
           ),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: const Color(0xFFCDEBD8)),
         ),
-        // The card opens all plans; the button books this one.
         child: InkWell(
-          onTap: () => context.go('/services?cat=monthly'),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('MONTHLY PLAN',
-                          style: AppText.caption.copyWith(
-                              color: AppColors.brand,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8)),
-                      const SizedBox(height: AppSpace.xs),
-                      Semantics(
-                        header: true,
-                        child: Text('3 full washes a month',
-                            style: AppText.h3.copyWith(color: Colors.white)),
-                      ),
-                      const SizedBox(height: 2),
-                      Text.rich(
-                        TextSpan(children: [
-                          TextSpan(
-                              text: price,
-                              style: AppText.bodyStrong.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800)),
-                          const TextSpan(text: ' / month'),
-                        ]),
-                        style: AppText.small
-                            .copyWith(color: const Color(0xD9FFFFFF)),
-                      ),
-                      const SizedBox(height: AppSpace.md),
-                      ElevatedButton(
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          context.push('/book/monthly-3'
-                              '${car == null ? '' : '?car=${car!.name}'}');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.brand,
-                          foregroundColor: AppColors.ink,
-                          minimumSize: const Size(0, 40),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpace.lg),
-                          textStyle: AppText.smallStrong
-                              .copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('Book plan'),
-                              SizedBox(width: AppSpace.xs),
-                              Icon(Icons.arrow_forward_rounded, size: 18),
-                            ]),
-                      ),
-                    ]),
+          onTap: open,
+          child: Stack(children: [
+            // A soft mint blob behind the calendar.
+            Positioned(
+              right: -30,
+              bottom: -40,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: const BoxDecoration(
+                    color: Color(0xFFC9EED7), shape: BoxShape.circle),
               ),
-              const SizedBox(width: AppSpace.sm),
-              Image.asset('assets/images/icon3d_calendar.png',
-                  height: 92, cacheHeight: 276, excludeFromSemantics: true),
-            ]),
-          ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
+              child: Row(children: [
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpace.sm, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text('MONTHLY PLAN',
+                              style: AppText.caption.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6)),
+                        ),
+                        const SizedBox(height: AppSpace.sm),
+                        Semantics(
+                          header: true,
+                          child: Text('Clean all month.\nBook once.',
+                              style: AppText.h3.copyWith(
+                                  color: AppColors.ink,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.2)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text('3 full washes at your door',
+                            style: AppText.small
+                                .copyWith(color: AppColors.textMuted)),
+                        const SizedBox(height: AppSpace.sm),
+                        Text.rich(
+                          TextSpan(children: [
+                            if (car == null)
+                              TextSpan(
+                                  text: 'From ',
+                                  style: AppText.small
+                                      .copyWith(color: AppColors.textMuted)),
+                            TextSpan(text: rupees(amount)),
+                            TextSpan(
+                                text: ' /month',
+                                style: AppText.small
+                                    .copyWith(color: AppColors.textMuted)),
+                          ]),
+                          style: AppText.priceSm.copyWith(color: AppColors.ink),
+                        ),
+                        const SizedBox(height: AppSpace.md),
+                        ElevatedButton(
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            open();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            minimumSize: const Size(0, 40),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpace.lg),
+                            textStyle: AppText.smallStrong
+                                .copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Explore plan'),
+                                SizedBox(width: AppSpace.xs),
+                                Icon(Icons.arrow_forward_rounded, size: 18),
+                              ]),
+                        ),
+                      ]),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Image.asset('assets/images/icon3d_calendar.png',
+                    height: 104, cacheHeight: 312, excludeFromSemantics: true),
+              ]),
+            ),
+          ]),
         ),
       ),
     );
@@ -1109,16 +1203,18 @@ class _Trust extends StatelessWidget {
                   .copyWith(fontWeight: FontWeight.w600, height: 1.3)),
         ),
         const SizedBox(height: AppSpace.xxl),
-        IntrinsicHeight(
-          child: Row(children: [
-            if (kEstablished != null) ...[
-              fact('Serving since', kEstablished!, kCityLabel),
-              const VerticalDivider(
-                  width: 1, thickness: 1, color: AppColors.border),
-            ],
-            fact('Open', kDaysLabel.replaceFirst('All ', ''), kHoursLabel),
-          ]),
-        ),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: HomeScreen._gutter),
+            child: IntrinsicHeight(
+              child: Row(children: [
+                if (kEstablished != null) ...[
+                  fact('Serving since', kEstablished!, kCityLabel),
+                  const VerticalDivider(
+                      width: 1, thickness: 1, color: AppColors.border),
+                ],
+                fact('Open', kDaysLabel.replaceFirst('All ', ''), kHoursLabel),
+              ]),
+            )),
         const SizedBox(height: AppSpace.xl),
         TextButton.icon(
           onPressed: () => openWhatsApp(context),
@@ -1130,6 +1226,17 @@ class _Trust extends StatelessWidget {
             minimumSize: const Size(0, 44),
           ),
         ),
+        // Our expert, arms crossed, in front of a line-drawn city: the
+        // calm last picture of Home (like the big home-service apps).
+        if (kTrustPhoto != null) ...[
+          const SizedBox(height: AppSpace.md),
+          Image.asset(kTrustPhoto!,
+              width: double.infinity,
+              fit: BoxFit.fitWidth,
+              cacheWidth: 1080,
+              excludeFromSemantics: true),
+        ] else
+          const SizedBox(height: AppSpace.lg),
       ]),
     );
   }
