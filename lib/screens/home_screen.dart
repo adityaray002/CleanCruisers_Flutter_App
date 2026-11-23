@@ -600,7 +600,7 @@ class _PopularServices extends StatelessWidget {
     'wash-exterior': 'Outside wash',
     'wash-interior': 'Inside clean',
     'wash-bucket': 'Bucket wash',
-    'dry-cleaning': 'Seat dry clean',
+    'dry-cleaning': 'Interior dry cleaning',
     'rubbing-exterior': 'Rubbing',
     '3m-wax-exterior': '3M wax',
     'full-package': 'Full detailing',
@@ -662,8 +662,8 @@ class _ServiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = service;
-    final price =
-        car == null ? 'from ${rupees(s.fromPrice)}' : rupees(s.priceFor(car!));
+    final from = car == null;
+    final amount = rupees(from ? s.fromPrice : s.priceFor(car!));
     void open() {
       HapticFeedback.selectionClick();
       context.push('/service/${s.id}');
@@ -674,6 +674,8 @@ class _ServiceTile extends StatelessWidget {
       context.push('/book/${s.id}${car == null ? '' : '?car=${car!.name}'}');
     }
 
+    // A service, not a product: the photo shows the work and how long it
+    // takes; the footer gives the price and a "Book" link.
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -682,77 +684,121 @@ class _ServiceTile extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: Stack(fit: StackFit.expand, children: [
-            Semantics(
-              button: true,
-              label: '${s.name}. $price. See details',
-              child: GestureDetector(
-                onTap: open,
-                child: Image.asset(photo,
-                    fit: BoxFit.cover,
-                    cacheWidth: 360,
-                    excludeFromSemantics: true),
-              ),
-            ),
-            // Book it straight away.
-            Positioned(
-              right: 6,
-              bottom: 6,
-              child: Semantics(
-                button: true,
-                label: 'Book ${s.listName}',
-                child: Material(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  elevation: 3,
-                  shadowColor: const Color(0x40101828),
-                  child: InkWell(
-                    onTap: book,
-                    borderRadius: BorderRadius.circular(10),
-                    child: const SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Icon(Icons.add_rounded,
-                          size: 26, color: AppColors.primary),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ]),
-        ),
-        Expanded(
+        Semantics(
+          button: true,
+          label: '${s.name}. Takes ${s.duration}. '
+              '${from ? 'From ' : ''}$amount. See details',
           child: ExcludeSemantics(
             child: InkWell(
               onTap: open,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          s.category == ServiceCategory.wash
-                              ? 'WASH'
-                              : 'DETAILING',
-                          style: AppText.caption.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8)),
-                      const SizedBox(height: 2),
-                      Text(_PopularServices.shortNames[s.id] ?? s.listName,
-                          style: AppText.smallStrong.copyWith(
-                              color: AppColors.ink,
-                              fontWeight: FontWeight.w800),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: AppSpace.xs),
-                      Text(price,
-                          style: AppText.smallStrong
-                              .copyWith(color: AppColors.text)),
-                    ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: Stack(fit: StackFit.expand, children: [
+                        Image.asset(photo,
+                            fit: BoxFit.cover,
+                            cacheWidth: 360,
+                            excludeFromSemantics: true),
+                        Positioned(
+                          left: 6,
+                          bottom: 6,
+                          right: 6,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(5, 2, 7, 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xE6FFFFFF),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                              ),
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.schedule_rounded,
+                                        size: 12, color: AppColors.primary),
+                                    const SizedBox(width: 3),
+                                    Flexible(
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(s.duration,
+                                            maxLines: 1,
+                                            style: AppText.caption.copyWith(
+                                                color: AppColors.text)),
+                                      ),
+                                    ),
+                                  ]),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                s.category == ServiceCategory.wash
+                                    ? 'WASH'
+                                    : 'DETAILING',
+                                style: AppText.caption.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8)),
+                            const SizedBox(height: 2),
+                            Text(
+                                _PopularServices.shortNames[s.id] ?? s.listName,
+                                style: AppText.smallStrong.copyWith(
+                                    color: AppColors.ink,
+                                    fontWeight: FontWeight.w800),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                          ]),
+                    ),
+                  ]),
+            ),
+          ),
+        ),
+        // The footer sits at the bottom of every tile, so the prices line up.
+        const Spacer(),
+        ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text.rich(
+                TextSpan(children: [
+                  if (from) const TextSpan(text: 'from '),
+                  TextSpan(
+                      text: amount,
+                      style: AppText.smallStrong.copyWith(
+                          color: AppColors.text, fontWeight: FontWeight.w800)),
+                ]),
+                maxLines: 1,
+                style: AppText.caption.copyWith(color: AppColors.textMuted),
               ),
+            ),
+          ),
+        ),
+        Semantics(
+          button: true,
+          label: 'Book ${s.name}',
+          child: InkWell(
+            onTap: book,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+              child: Row(children: [
+                Text('Book',
+                    style: AppText.smallStrong.copyWith(
+                        color: AppColors.primary, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 2),
+                const Icon(Icons.arrow_forward_rounded,
+                    size: 16, color: AppColors.primary),
+              ]),
             ),
           ),
         ),
@@ -815,7 +861,7 @@ class _MonthlyCard extends StatelessWidget {
                               style: AppText.bodyStrong.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w800)),
-                          const TextSpan(text: ' a month, at your door'),
+                          const TextSpan(text: ' / month'),
                         ]),
                         style: AppText.small
                             .copyWith(color: const Color(0xD9FFFFFF)),
