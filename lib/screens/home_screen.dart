@@ -452,12 +452,22 @@ class _ActionCard extends StatelessWidget {
                                             color: AppColors.textMuted)),
                                   ]),
                             ),
-                            Image.asset(image,
-                                height: 52,
-                                width: 56,
-                                fit: BoxFit.contain,
-                                cacheHeight: 156,
-                                excludeFromSemantics: true),
+                            // Takes 56 px of the row; the picture may use
+                            // the card's right padding too (the wide foam gun).
+                            SizedBox(
+                              width: 56,
+                              height: 52,
+                              child: OverflowBox(
+                                alignment: Alignment.centerLeft,
+                                maxWidth: 62,
+                                child: Image.asset(image,
+                                    height: 52,
+                                    width: 62,
+                                    fit: BoxFit.contain,
+                                    cacheHeight: 156,
+                                    excludeFromSemantics: true),
+                              ),
+                            ),
                           ]),
                       const SizedBox(height: AppSpace.sm),
                       // The button: filled green, so it reads as "tap me".
