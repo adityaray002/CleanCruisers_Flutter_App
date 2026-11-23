@@ -311,10 +311,11 @@ class _Promise extends StatelessWidget {
                           color: AppColors.brand, fontWeight: FontWeight.w800)),
                   TextSpan(text: 'it\'s parked'),
                 ]),
-                style: AppText.hero.copyWith(
+                style: AppText.h1.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: -0.5),
+                    height: 1.2,
+                    letterSpacing: -0.3),
               ),
             ),
           ),
@@ -432,7 +433,6 @@ class _ActionCard extends StatelessWidget {
           child: Material(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            elevation: 0,
             child: Ink(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -454,37 +454,45 @@ class _ActionCard extends StatelessWidget {
                   HapticFeedback.selectionClick();
                   onTap();
                 },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: AppText.h3),
-                        const SizedBox(height: 2),
-                        Text(line, style: AppText.small, maxLines: 2),
-                        const SizedBox(height: AppSpace.sm),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpace.sm, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                          ),
-                          child: Text('from ${rupees(from)}',
-                              style: AppText.caption.copyWith(
-                                  color: AppColors.primaryDk,
-                                  fontWeight: FontWeight.w800)),
-                        ),
-                        const Spacer(),
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Image.asset(image,
-                              height: 76,
-                              fit: BoxFit.contain,
-                              cacheHeight: 228,
-                              excludeFromSemantics: true),
-                        ),
-                      ]),
+                // The icon is big and sits in the bottom-right corner, the
+                // text on the left, so the card has no empty middle.
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Stack(children: [
+                    Positioned(
+                      right: -6,
+                      bottom: -4,
+                      child: Image.asset(image,
+                          height: 92,
+                          fit: BoxFit.contain,
+                          cacheHeight: 276,
+                          excludeFromSemantics: true),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 88),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: AppText.h3),
+                            const SizedBox(height: 2),
+                            Text(line, style: AppText.small, maxLines: 2),
+                            const SizedBox(height: AppSpace.sm),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpace.sm, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                              ),
+                              child: Text('from ${rupees(from)}',
+                                  style: AppText.caption.copyWith(
+                                      color: AppColors.primaryDk,
+                                      fontWeight: FontWeight.w800)),
+                            ),
+                          ]),
+                    ),
+                  ]),
                 ),
               ),
             ),
@@ -779,66 +787,58 @@ class _MonthlyCard extends StatelessWidget {
 }
 
 // ── How it works (new customers only) ────────────────────────────────────────
+/// One quiet line of three steps, no card.
 class _HowItWorks extends StatelessWidget {
   const _HowItWorks();
 
   static const _steps = [
-    ('Pick a package', 'See the exact price'),
-    ('Request a slot', 'We confirm in the app'),
-    kPayAfterService
-        ? ('Pay after', 'Cash or UPI')
-        : ('We clean', 'At your door'),
+    'Pick a package',
+    'Request a slot',
+    kPayAfterService ? 'Pay after' : 'We clean',
   ];
 
   @override
   Widget build(BuildContext context) {
+    final spoken = [
+      for (var i = 0; i < _steps.length; i++) '${i + 1}, ${_steps[i]}'
+    ].join('. ');
     return Semantics(
-      label: 'How it works: '
-          '${[
-        for (var i = 0; i < _steps.length; i++) '${i + 1}, ${_steps[i].$1}'
-      ].join('. ')}',
+      label: 'How it works: $spoken',
       child: ExcludeSemantics(
-        child: AppCard(
-          radius: AppRadius.lg,
-          padding: const EdgeInsets.all(AppSpace.lg),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('How it works', style: AppText.title),
-            const SizedBox(height: AppSpace.md),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              for (var i = 0; i < _steps.length; i++)
-                Expanded(
-                  child: Column(children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: i == _steps.length - 1
-                            ? AppColors.primary
-                            : AppColors.ink,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text('${i + 1}',
-                          style: AppText.smallStrong.copyWith(
-                              color: i == _steps.length - 1
-                                  ? Colors.white
-                                  : AppColors.brand)),
-                    ),
-                    const SizedBox(height: AppSpace.sm),
-                    Text(_steps[i].$1,
-                        textAlign: TextAlign.center,
-                        style: AppText.smallStrong.copyWith(
-                            color: i == _steps.length - 1
-                                ? AppColors.primaryDk
-                                : AppColors.text)),
-                    Text(_steps[i].$2,
-                        textAlign: TextAlign.center, style: AppText.caption),
-                  ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('HOW IT WORKS',
+              style: AppText.overline.copyWith(color: AppColors.textSubtle)),
+          const SizedBox(height: AppSpace.sm),
+          Row(children: [
+            for (var i = 0; i < _steps.length; i++) ...[
+              if (i > 0)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpace.xs),
+                  child: Icon(Icons.chevron_right_rounded,
+                      size: 16, color: AppColors.textSubtle),
                 ),
-            ]),
+              Flexible(
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                        color: AppColors.primarySoft, shape: BoxShape.circle),
+                    child: Text('${i + 1}',
+                        style: AppText.caption
+                            .copyWith(color: AppColors.primaryDk)),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(_steps[i],
+                        style: AppText.caption.copyWith(color: AppColors.text)),
+                  ),
+                ]),
+              ),
+            ],
           ]),
-        ),
+        ]),
       ),
     );
   }
@@ -884,38 +884,59 @@ class _BeforeAfter extends StatelessWidget {
   }
 }
 
-// ── Facts and chat ───────────────────────────────────────────────────────────
+// ── Trust strip: hours, since when, chat ─────────────────────────────────────
+/// One soft strip with three facts; the chat one opens WhatsApp.
 class _Facts extends StatelessWidget {
   const _Facts();
 
   @override
   Widget build(BuildContext context) {
-    Widget tile(String top, String bottom, {VoidCallback? onTap}) => Expanded(
-          child: AppCard(
+    Widget fact(IconData icon, String top, String bottom,
+            {VoidCallback? onTap}) =>
+        Expanded(
+          child: InkWell(
             onTap: onTap,
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.xs, vertical: AppSpace.md),
-            child: Column(children: [
-              Text(top,
-                  textAlign: TextAlign.center,
-                  style: AppText.smallStrong.copyWith(
-                      color:
-                          onTap == null ? AppColors.text : AppColors.primary)),
-              const SizedBox(height: 2),
-              Text(bottom, textAlign: TextAlign.center, style: AppText.caption),
-            ]),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
+              child: Column(children: [
+                Icon(icon, size: 20, color: AppColors.primary),
+                const SizedBox(height: AppSpace.xs),
+                Text(top,
+                    textAlign: TextAlign.center,
+                    style: AppText.smallStrong.copyWith(
+                        color: onTap == null
+                            ? AppColors.text
+                            : AppColors.primary)),
+                Text(bottom,
+                    textAlign: TextAlign.center, style: AppText.caption),
+              ]),
+            ),
           ),
         );
-    return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        tile(kDaysLabel, kHoursLabel.replaceAll(' ', ' ')),
-        const SizedBox(width: AppSpace.sm),
-        if (kEstablished != null) ...[
-          tile('Since $kEstablished', kCityLabel),
-          const SizedBox(width: AppSpace.sm),
-        ],
-        tile('Chat with us', 'on WhatsApp', onTap: () => openWhatsApp(context)),
-      ]),
+    Widget divider() => Container(
+        width: 1,
+        margin: const EdgeInsets.symmetric(vertical: AppSpace.lg),
+        color: AppColors.border);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      child: IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          fact(Icons.schedule_rounded, kDaysLabel, kHoursLabel),
+          if (kEstablished != null) ...[
+            divider(),
+            fact(Icons.verified_outlined, 'Since $kEstablished', kCityLabel),
+          ],
+          divider(),
+          fact(Icons.chat_bubble_outline_rounded, 'Chat with us', 'on WhatsApp',
+              onTap: () => openWhatsApp(context)),
+        ]),
+      ),
     );
   }
 }

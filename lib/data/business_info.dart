@@ -33,9 +33,11 @@ const String? kCustomersServed = null; // e.g. '1000+'
 const String? kEstablished = '2020';
 
 // Our own work (same car, before and after our cleaning); confirmed by the
-// owner on 13 Nov 2026. Set to null to hide the "See the difference" card
-// on Home.
-const String? kBeforeAfterPhoto = 'assets/images/wheel_before_after.jpg';
+// owner on 13 Nov 2026 (assets/images/wheel_before_after.jpg). Hidden on
+// Home since 23 Nov 2026: the street photo doesn't match the Home studio
+// photos. Set it back (or to a studio-style before/after) to show the
+// "See the difference" card again.
+const String? kBeforeAfterPhoto = null;
 
 // TODO(business): set to true only once the team really uses water-saving
 // methods and eco-friendly products. Shows the green banner on Home.
