@@ -1,6 +1,7 @@
 import '../providers/api_providers.dart';
 import '../core/scheduling.dart' show clockLabel;
-import '../data/api/models.dart' show Booking, BookingState, Coverage, PublicOffer;
+import '../data/api/models.dart'
+    show Booking, BookingState, Coverage, PublicOffer;
 import '../providers/booking_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,16 +20,19 @@ import '../widgets/customer_sheets.dart';
 import '../widgets/motion.dart';
 import '../widgets/ui.dart';
 
-/// Home (v3 design). Top to bottom:
-/// 1. logo, where the car is parked, car pill (prices follow it), bell,
-/// 2. the live booking, if any, as a dark status card,
-/// 3. new customers: a photo hero with "pay after" and the first-booking
-///    offer; returning customers: "Book again" with the last finished wash,
-/// 4. "What does your car need?" — Car Wash and Detailing & Polish cards,
-///    then the monthly plan,
-/// 5. new customers: how it works,
-/// 6. before / after photo (only when kBeforeAfterPhoto is set),
-/// 7. three facts and a chat tile, eco promise (only when confirmed).
+/// Home (v4, one photo style like the big home-service apps). Top to bottom:
+/// 1. a green band: logo, where the car is parked, car pill, bell, the
+///    promise, "pay after" and the first-booking offer, and our expert,
+/// 2. two big cards on the band's edge: Car wash and Detailing,
+/// 3. the live booking, if any, or "Book again" with the last finished wash,
+/// 4. popular services: the same expert doing each job (3 per row),
+/// 5. the monthly plan,
+/// 6. new customers: how it works,
+/// 7. before / after photo (only when kBeforeAfterPhoto is set),
+/// 8. three facts and a chat tile, eco promise (only when confirmed).
+///
+/// All Home pictures come from one photo shoot (docs/HOME_ILLUSTRATION_BRIEF.md):
+/// the same expert, uniform, car and white studio.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -39,7 +43,8 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mine = ref.watch(myApiBookingsProvider).valueOrNull ?? MyBookings.none;
+    final mine =
+        ref.watch(myApiBookingsProvider).valueOrNull ?? MyBookings.none;
     ref.watch(catalogProvider); // prices follow the server catalog
     final car = ref.watch(profileProvider).car;
     final live = mine.upcoming.firstOrNull;
@@ -59,58 +64,49 @@ class HomeScreen extends ConsumerWidget {
         : null;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark
+      // Light status-bar icons over the green band.
+      value: SystemUiOverlayStyle.light
           .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppColors.surface,
         // Dense cards: system text may grow, but only to 1.15x so the cards
         // keep their shape on small phones.
         body: MediaQuery.withClampedTextScaling(
           maxScaleFactor: 1.15,
-          child: SafeArea(
-            bottom: false,
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: AppSpace.xxl),
-              children: [
-                Padding(
-                  padding: _section(top: AppSpace.sm, bottom: AppSpace.md),
-                  child: _Header(hasUpdate: live != null),
-                ),
-                if (live != null)
-                  Padding(
-                    padding: _section(bottom: AppSpace.md),
-                    child: _LiveBookingCard(booking: live),
-                  ),
-                if (isNew)
-                  Padding(
-                    padding: _section(),
-                    child: _Hero(firstOffer: firstOffer),
-                  )
-                else if (lastDone != null)
-                  Padding(
-                    padding: _section(),
-                    child: _BookAgain(booking: lastDone),
-                  ),
-                Padding(
-                  padding: _section(bottom: AppSpace.md),
-                  child: Reveal(child: _Categories(car: car)),
-                ),
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: AppSpace.xxl),
+            children: [
+              _Top(hasUpdate: live != null, firstOffer: firstOffer, car: car),
+              const SizedBox(height: AppSpace.lg),
+              if (live != null)
                 Padding(
                   padding: _section(),
-                  child: Reveal(child: _MonthlyCard(car: car)),
+                  child: _LiveBookingCard(booking: live),
+                )
+              else if (lastDone != null)
+                Padding(
+                  padding: _section(),
+                  child: _BookAgain(booking: lastDone),
                 ),
-                if (isNew)
-                  Padding(padding: _section(), child: const _HowItWorks()),
-                if (kBeforeAfterPhoto != null)
-                  Padding(
-                    padding: _section(bottom: AppSpace.lg),
-                    child: _BeforeAfter(photo: kBeforeAfterPhoto!),
-                  ),
-                Padding(padding: _section(), child: const _Facts()),
-                if (kEcoFriendly)
-                  Padding(padding: _section(), child: const _EcoBanner()),
-              ],
-            ),
+              Padding(
+                padding: _section(),
+                child: Reveal(child: _PopularServices(car: car)),
+              ),
+              Padding(
+                padding: _section(),
+                child: Reveal(child: _MonthlyCard(car: car)),
+              ),
+              if (isNew)
+                Padding(padding: _section(), child: const _HowItWorks()),
+              if (kBeforeAfterPhoto != null)
+                Padding(
+                  padding: _section(bottom: AppSpace.lg),
+                  child: _BeforeAfter(photo: kBeforeAfterPhoto!),
+                ),
+              Padding(padding: _section(), child: const _Facts()),
+              if (kEcoFriendly)
+                Padding(padding: _section(), child: const _EcoBanner()),
+            ],
           ),
         ),
       ),
@@ -118,7 +114,76 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// ── Header: logo, address, car pill, bell ────────────────────────────────────
+// ── Top: green band with the expert, and the two big cards on its edge ───────
+class _Top extends StatelessWidget {
+  final bool hasUpdate;
+  final PublicOffer? firstOffer;
+  final CarType? car;
+  const _Top(
+      {required this.hasUpdate, required this.firstOffer, required this.car});
+
+  /// How far the cards hang below the green band.
+  static const _overhang = 72.0;
+
+  static const _band = BoxDecoration(
+    gradient: RadialGradient(
+      center: Alignment(0.8, -0.9),
+      radius: 1.3,
+      colors: [Color(0xFF1F9A55), AppColors.primary, Color(0xFF0B5D3B)],
+      stops: [0, 0.38, 1],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Stack(children: [
+      const Positioned(
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: _overhang,
+        child: DecoratedBox(decoration: _band),
+      ),
+      // Soft light circle, top right.
+      Positioned(
+        right: -70,
+        top: -90,
+        child: Container(
+          width: 260,
+          height: 260,
+          decoration: const BoxDecoration(
+              color: Color(0x0FFFFFFF), shape: BoxShape.circle),
+        ),
+      ),
+      // Our expert, standing behind the cards.
+      Positioned(
+        right: 0,
+        bottom: _overhang + 4,
+        height: 236,
+        child: Image.asset('assets/images/pro_hero.png',
+            fit: BoxFit.contain,
+            alignment: Alignment.bottomRight,
+            cacheHeight: 720,
+            excludeFromSemantics: true),
+      ),
+      Padding(
+        padding: EdgeInsets.fromLTRB(
+            HomeScreen._gutter, top + AppSpace.sm, HomeScreen._gutter, 0),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _Header(hasUpdate: hasUpdate),
+          const SizedBox(height: AppSpace.xl),
+          _Promise(firstOffer: firstOffer),
+          const SizedBox(height: AppSpace.xl),
+          _ActionCards(car: car),
+        ]),
+      ),
+    ]);
+  }
+}
+
+// ── Header: logo, address, car pill, bell (on the green band) ────────────────
 class _Header extends ConsumerStatefulWidget {
   /// A booking is in progress: the bell shows a dot and opens it.
   final bool hasUpdate;
@@ -163,7 +228,7 @@ class _HeaderState extends ConsumerState<_Header> {
               excludeFromSemantics: true),
         ),
         const SizedBox(width: 10),
-        const Expanded(child: ParkedAtLine(withOverline: true)),
+        const Expanded(child: ParkedAtLine(withOverline: true, onDark: true)),
         const SizedBox(width: AppSpace.sm),
         const CarPill(),
         const SizedBox(width: AppSpace.sm),
@@ -212,95 +277,67 @@ class _HeaderState extends ConsumerState<_Header> {
   }
 }
 
-// ── Hero (new customers) ─────────────────────────────────────────────────────
-/// Our team's photo with the promise and, when one is live, the
-/// first-booking offer. Text sits on a dark fade so it reads on any crop.
-class _Hero extends StatelessWidget {
+// ── The promise, on the band's left (the expert stands on the right) ─────────
+class _Promise extends StatelessWidget {
   final PublicOffer? firstOffer;
-  const _Hero({required this.firstOffer});
+  const _Promise({required this.firstOffer});
 
   @override
   Widget build(BuildContext context) {
     final o = firstOffer;
     final off = o?.headline.replaceAll('OFF', 'off');
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Stack(children: [
-        Positioned.fill(
-          child: Image.asset('assets/images/hero_team_kit.jpg',
-              fit: BoxFit.cover,
-              alignment: const Alignment(-0.1, -0.7),
-              cacheWidth: 1000,
-              excludeFromSemantics: true),
-        ),
-        const Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.3, 0.62, 1],
-                colors: [Color(0x000B0F10), Color(0xB80B0F10), AppColors.ink],
+    return FractionallySizedBox(
+      widthFactor: 0.6,
+      alignment: Alignment.centerLeft,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Semantics(
+          header: true,
+          label: 'A spotless car, right where it\'s parked',
+          // Always three lines. 32px is already large text, so it isn't
+          // scaled up; on narrow phones it shrinks just enough to fit.
+          child: ExcludeSemantics(
+            child: MediaQuery.withNoTextScaling(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text.rich(
+                  const TextSpan(children: [
+                    TextSpan(text: 'A spotless car,\n'),
+                    TextSpan(
+                        text: 'right where\n',
+                        style: TextStyle(
+                            color: AppColors.brand,
+                            fontWeight: FontWeight.w800)),
+                    TextSpan(text: 'it\'s parked'),
+                  ]),
+                  style: AppText.hero.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.5),
+                ),
               ),
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 170, 18, 16),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(height: AppSpace.md),
+        Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+          if (kPayAfterService)
+            const _HeroPill('Pay after the service', icon: Icons.check_rounded),
+          if (o != null)
             Semantics(
-              header: true,
-              // Always two lines. 32px is already large text, so it isn't
-              // scaled up; on narrow phones it shrinks just enough to fit
-              // instead of going to three lines over the photo.
-              child: MediaQuery.withNoTextScaling(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text('A spotless car, right\nwhere it\'s parked',
-                      style: AppText.hero.copyWith(color: Colors.white)),
+              button: true,
+              label: '$off your first booking. Code ${o.code}. Tap to copy',
+              child: ExcludeSemantics(
+                child: GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: o.code));
+                    showMessage(context, 'Code ${o.code} copied');
+                  },
+                  child: _HeroPill('$off · ${o.code}', bright: true),
                 ),
               ),
             ),
-            const SizedBox(height: AppSpace.md),
-            Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
-              if (kPayAfterService) const _HeroPill('Pay after the service'),
-              if (o != null)
-                Semantics(
-                  button: true,
-                  label: '$off your first booking. Code ${o.code}. Tap to copy',
-                  child: ExcludeSemantics(
-                    child: GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: o.code));
-                        showMessage(context, 'Code ${o.code} copied');
-                      },
-                      child: _HeroPill('$off · ${o.code}', bright: true),
-                    ),
-                  ),
-                ),
-            ]),
-            const SizedBox(height: AppSpace.lg),
-            ElevatedButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                context.go('/services?cat=wash');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brand,
-                foregroundColor: AppColors.ink,
-                minimumSize: const Size(0, 48),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
-              ),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('Book a wash'),
-                SizedBox(width: AppSpace.sm),
-                Icon(Icons.arrow_forward_rounded, size: 20),
-              ]),
-            ),
-          ]),
-        ),
+        ]),
       ]),
     );
   }
@@ -309,20 +346,153 @@ class _Hero extends StatelessWidget {
 class _HeroPill extends StatelessWidget {
   final String text;
   final bool bright;
-  const _HeroPill(this.text, {this.bright = false});
+  final IconData? icon;
+  const _HeroPill(this.text, {this.bright = false, this.icon});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: bright ? AppColors.brand : const Color(0x29FFFFFF),
-          borderRadius: BorderRadius.circular(AppRadius.pill),
+  Widget build(BuildContext context) {
+    final color = bright ? AppColors.ink : Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bright ? AppColors.brand : const Color(0x24FFFFFF),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (icon != null) ...[
+          Icon(icon, size: 14, color: bright ? AppColors.ink : AppColors.brand),
+          const SizedBox(width: AppSpace.xs),
+        ],
+        Flexible(
+          child: Text(text,
+              style: AppText.caption
+                  .copyWith(color: color, fontWeight: FontWeight.w800)),
         ),
-        child: Text(text,
-            style: AppText.caption.copyWith(
-                color: bright ? AppColors.ink : Colors.white,
-                fontWeight: FontWeight.w800)),
-      );
+      ]),
+    );
+  }
+}
+
+// ── The two big cards: Car wash and Detailing ────────────────────────────────
+class _ActionCards extends StatelessWidget {
+  final CarType? car;
+  const _ActionCards({required this.car});
+
+  @override
+  Widget build(BuildContext context) {
+    int priceOf(CarService s) => car == null ? s.fromPrice : s.priceFor(car!);
+    int cheapestIn(ServiceCategory c) =>
+        servicesIn(c).map(priceOf).reduce((a, b) => a < b ? a : b);
+
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(
+          child: _ActionCard(
+            title: 'Car wash',
+            line: 'Outside, inside or both',
+            from: cheapestIn(ServiceCategory.wash),
+            image: 'assets/images/icon3d_wash.png',
+            onTap: () => context.go('/services?cat=wash'),
+          ),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: _ActionCard(
+            title: 'Detailing',
+            line: 'Polish, wax, dry clean',
+            from: cheapestIn(ServiceCategory.detailing),
+            image: 'assets/images/icon3d_polish.png',
+            onTap: () => context.go('/services?cat=detailing'),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final String title, line, image;
+  final int from;
+  final VoidCallback onTap;
+  const _ActionCard({
+    required this.title,
+    required this.line,
+    required this.from,
+    required this.image,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$title. $line. From ${rupees(from)}',
+      child: ExcludeSemantics(
+        child: PressScale(
+          child: Material(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            elevation: 0,
+            child: Ink(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Color(0x1F101828),
+                      blurRadius: 30,
+                      offset: Offset(0, 10)),
+                  BoxShadow(
+                      color: Color(0x0F101828),
+                      blurRadius: 2,
+                      offset: Offset(0, 1)),
+                ],
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: AppText.h3),
+                        const SizedBox(height: 2),
+                        Text(line, style: AppText.small, maxLines: 2),
+                        const SizedBox(height: AppSpace.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpace.sm, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text('from ${rupees(from)}',
+                              style: AppText.caption.copyWith(
+                                  color: AppColors.primaryDk,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                        const Spacer(),
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Image.asset(image,
+                              height: 84,
+                              fit: BoxFit.contain,
+                              cacheHeight: 252,
+                              excludeFromSemantics: true),
+                        ),
+                      ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Book again (returning customers) ─────────────────────────────────────────
@@ -338,7 +508,7 @@ class _BookAgain extends StatelessWidget {
     final s = serviceById(b.service.id)!;
     final car = b.car.type;
     final price = '${rupees(s.priceFor(car))}${s.priceSuffix}';
-    final photo = s.cardPhoto;
+    final photo = _PopularServices.photos[s.id] ?? s.cardPhoto;
     void book() {
       HapticFeedback.selectionClick();
       context.push('/book/${s.id}?car=${car.name}');
@@ -403,160 +573,141 @@ class _BookAgain extends StatelessWidget {
   }
 }
 
-// ── Categories: wash and detailing, side by side ─────────────────────────────
-class _Categories extends ConsumerWidget {
+// ── Popular services: the expert doing each job, 3 per row ───────────────────
+class _PopularServices extends StatelessWidget {
   final CarType? car;
-  const _Categories({required this.car});
+  const _PopularServices({required this.car});
 
-  static const _durations = {
-    ServiceCategory.wash: '1–2.5 hrs',
-    ServiceCategory.detailing: '2–5 hrs',
+  /// Home photos, one per service, all from the same shoot.
+  static const photos = {
+    'wash-full': 'assets/images/pro_full_wash.jpg',
+    'wash-exterior': 'assets/images/pro_exterior.jpg',
+    'wash-interior': 'assets/images/pro_interior.jpg',
+    'wash-bucket': 'assets/images/pro_bucket.jpg',
+    'dry-cleaning': 'assets/images/pro_dry_clean.jpg',
+    'rubbing-exterior': 'assets/images/pro_rubbing.jpg',
+    '3m-wax-exterior': 'assets/images/pro_wax.jpg',
+    'full-package': 'assets/images/pro_full_package.jpg',
   };
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    int priceOf(CarService s) => car == null ? s.fromPrice : s.priceFor(car!);
-    int cheapestIn(ServiceCategory c) =>
-        servicesIn(c).map(priceOf).reduce((a, b) => a < b ? a : b);
-    String meta(ServiceCategory c) =>
-        '${servicesIn(c).length} packages · ${_durations[c]}';
+  /// Shown on Home, in this order (the rest are one tap away in "See all").
+  static const _popular = [
+    'wash-full',
+    'wash-exterior',
+    'wash-interior',
+    'wash-bucket',
+    'dry-cleaning',
+    'full-package',
+  ];
 
+  @override
+  Widget build(BuildContext context) {
+    final services = _popular.map(serviceById).whereType<CarService>().toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Semantics(
-        header: true,
-        child: Text('What does your car need?', style: AppText.h2),
-      ),
-      const SizedBox(height: 2),
       Row(children: [
-        Flexible(
-          child: Text(
-              car == null
-                  ? 'Pick your car to see exact prices'
-                  : 'Prices for a ${carTypeNames[car]}',
-              style: AppText.small),
+        Expanded(
+          child: Semantics(
+            header: true,
+            child: Text('Popular services', style: AppText.h2),
+          ),
         ),
         TextButton(
-          onPressed: () => showCarSheet(context, ref),
+          onPressed: () => context.go('/services'),
           style: TextButton.styleFrom(
             foregroundColor: AppColors.primary,
             textStyle: AppText.smallStrong,
             minimumSize: const Size(0, 40),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
           ),
-          child: Text(car == null ? 'Choose car' : 'Change'),
+          child: const Text('See all'),
         ),
       ]),
-      const SizedBox(height: AppSpace.sm),
-      IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(
-            child: _CategoryCard(
-              photo: 'assets/images/pressure_rinse.jpg',
-              title: 'Car Wash',
-              line: 'Dust and dirt off, inside and out',
-              meta: meta(ServiceCategory.wash),
-              from: cheapestIn(ServiceCategory.wash),
-              badge: 'Most booked',
-              onTap: () => context.go('/services?cat=wash'),
-            ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: _CategoryCard(
-              photo: 'assets/images/wax_finish.jpg',
-              title: 'Detailing & Polish',
-              line: 'Shine, scratches, stains and smell',
-              meta: meta(ServiceCategory.detailing),
-              from: cheapestIn(ServiceCategory.detailing),
-              onTap: () => context.go('/services?cat=detailing'),
-            ),
-          ),
-        ]),
-      ),
+      const SizedBox(height: AppSpace.md),
+      LayoutBuilder(builder: (context, c) {
+        const gap = AppSpace.md;
+        final w = ((c.maxWidth - 2 * gap) / 3).floorToDouble();
+        return Wrap(
+          spacing: gap,
+          runSpacing: AppSpace.lg,
+          children: [
+            for (final s in services)
+              SizedBox(
+                width: w,
+                child: _ServiceTile(service: s, car: car, photo: photos[s.id]!),
+              ),
+          ],
+        );
+      }),
     ]);
   }
 }
 
-class _CategoryCard extends StatelessWidget {
-  final String photo, title, line, meta;
-  final int from;
-  final String? badge;
-  final VoidCallback onTap;
-  const _CategoryCard({
-    required this.photo,
-    required this.title,
-    required this.line,
-    required this.meta,
-    required this.from,
-    required this.onTap,
-    this.badge,
-  });
+class _ServiceTile extends StatelessWidget {
+  final CarService service;
+  final CarType? car;
+  final String photo;
+  const _ServiceTile(
+      {required this.service, required this.car, required this.photo});
 
   @override
   Widget build(BuildContext context) {
+    final s = service;
+    final price =
+        car == null ? 'from ${rupees(s.fromPrice)}' : rupees(s.priceFor(car!));
+    void open() {
+      HapticFeedback.selectionClick();
+      context.push('/service/${s.id}');
+    }
+
     return Semantics(
       button: true,
-      label: '$title. $line. $meta. From ${rupees(from)}',
+      label: '${s.listName}. $price',
       child: ExcludeSemantics(
-        child: AppCard(
-          onTap: onTap,
-          radius: AppRadius.lg,
-          padding: EdgeInsets.zero,
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.lg - 1)),
-              child: SizedBox(
-                height: 132,
+        child: GestureDetector(
+          onTap: open,
+          behavior: HitTestBehavior.opaque,
+          child: PressScale(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              AspectRatio(
+                aspectRatio: 1,
                 child: Stack(fit: StackFit.expand, children: [
-                  Image.asset(photo,
-                      fit: BoxFit.cover,
-                      cacheWidth: 500,
-                      excludeFromSemantics: true),
-                  if (badge != null)
-                    Positioned(
-                      left: 10,
-                      top: 10,
-                      child: Pill(badge!, tone: PillTone.solid),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Image.asset(photo,
+                        fit: BoxFit.cover,
+                        cacheWidth: 360,
+                        excludeFromSemantics: true),
+                  ),
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: AppShadow.card,
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded,
+                          size: 16, color: AppColors.primary),
                     ),
+                  ),
                 ]),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: AppText.h3),
-                      const SizedBox(height: 2),
-                      Text(line, style: AppText.small),
-                      const SizedBox(height: 2),
-                      Text(meta, style: AppText.caption),
-                      const Spacer(),
-                      const SizedBox(height: AppSpace.sm),
-                      Row(children: [
-                        Expanded(
-                          child: Text('from ${rupees(from)}',
-                              style: AppText.bodyStrong.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w800)),
-                        ),
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: const BoxDecoration(
-                              color: AppColors.ink, shape: BoxShape.circle),
-                          child: const Icon(Icons.arrow_forward_rounded,
-                              size: 16, color: AppColors.brand),
-                        ),
-                      ]),
-                    ]),
-              ),
-            ),
-          ]),
+              const SizedBox(height: AppSpace.sm),
+              Text(s.listName,
+                  style: AppText.smallStrong.copyWith(color: AppColors.text),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text(price,
+                  style:
+                      AppText.bodyStrong.copyWith(fontWeight: FontWeight.w800)),
+            ]),
+          ),
         ),
       ),
     );
@@ -564,7 +715,7 @@ class _CategoryCard extends StatelessWidget {
 }
 
 // ── Monthly plan ─────────────────────────────────────────────────────────────
-/// The 3-wash plan (Best value) as a photo card. The price follows the car.
+/// The 3-wash plan (Best value) as a dark card. The price follows the car.
 class _MonthlyCard extends StatelessWidget {
   final CarType? car;
   const _MonthlyCard({required this.car});
@@ -589,33 +740,17 @@ class _MonthlyCard extends StatelessWidget {
               color: AppColors.ink,
               child: Stack(children: [
                 Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 210,
-                  child: Image.asset('assets/images/clean_suv.jpg',
-                      fit: BoxFit.cover,
-                      cacheWidth: 600,
+                  right: -6,
+                  bottom: -8,
+                  child: Image.asset('assets/images/icon3d_calendar.png',
+                      height: 128,
+                      cacheHeight: 384,
                       excludeFromSemantics: true),
-                ),
-                const Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        stops: [0.38, 0.62, 1],
-                        colors: [
-                          AppColors.ink,
-                          Color(0x8C0B0F10),
-                          Color(0x000B0F10)
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(18),
                   child: FractionallySizedBox(
-                    widthFactor: 0.66,
+                    widthFactor: 0.64,
                     alignment: Alignment.centerLeft,
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

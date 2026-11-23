@@ -134,7 +134,11 @@ class ParkedAtLine extends ConsumerWidget {
   /// Home header style: a small "Car parked at" line above, and the place
   /// in bold ("Home, Janakpuri").
   final bool withOverline;
-  const ParkedAtLine({super.key, this.withOverline = false});
+
+  /// White text for the Home green band (only with [withOverline]).
+  final bool onDark;
+  const ParkedAtLine(
+      {super.key, this.withOverline = false, this.onDark = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -142,8 +146,7 @@ class ParkedAtLine extends ConsumerWidget {
     final place = sel == null ? null : addressLabelNames[sel.label]!;
     final color = sel == null ? AppColors.primary : AppColors.textMuted;
     if (withOverline) {
-      final short =
-          sel == null ? 'Set location' : '$place · ${sel.address}';
+      final short = sel == null ? 'Set location' : '$place · ${sel.address}';
       return Semantics(
         button: true,
         label: sel == null
@@ -159,20 +162,27 @@ class ParkedAtLine extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Car parked at', style: AppText.caption),
+                    Text('Car parked at',
+                        style: onDark
+                            ? AppText.caption
+                                .copyWith(color: const Color(0xCCFFFFFF))
+                            : AppText.caption),
                     Row(children: [
                       Flexible(
                         child: Text(short,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppText.bodyStrong.copyWith(
-                                color: sel == null
-                                    ? AppColors.primary
-                                    : AppColors.text,
+                                color: onDark
+                                    ? Colors.white
+                                    : sel == null
+                                        ? AppColors.primary
+                                        : AppColors.text,
                                 fontWeight: FontWeight.w800)),
                       ),
-                      const Icon(Icons.keyboard_arrow_down_rounded,
-                          size: 18, color: AppColors.primary),
+                      Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: onDark ? AppColors.brand : AppColors.primary),
                     ]),
                   ]),
             ),
