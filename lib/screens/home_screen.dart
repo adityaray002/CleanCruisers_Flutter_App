@@ -123,14 +123,14 @@ class _Top extends StatelessWidget {
       {required this.hasUpdate, required this.firstOffer, required this.car});
 
   /// How far the cards hang below the green band.
-  static const _overhang = 72.0;
+  static const _overhang = 64.0;
 
   static const _band = BoxDecoration(
-    gradient: RadialGradient(
-      center: Alignment(0.8, -0.9),
-      radius: 1.3,
-      colors: [Color(0xFF1F9A55), AppColors.primary, Color(0xFF0B5D3B)],
-      stops: [0, 0.38, 1],
+    gradient: LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [Color(0xFF1A8F4C), AppColors.primary, AppColors.primaryDk],
+      stops: [0, 0.45, 1],
     ),
   );
 
@@ -156,26 +156,31 @@ class _Top extends StatelessWidget {
               color: Color(0x0FFFFFFF), shape: BoxShape.circle),
         ),
       ),
-      // Our expert, standing behind the cards.
-      Positioned(
-        right: 0,
-        bottom: _overhang + 4,
-        height: 236,
-        child: Image.asset('assets/images/pro_hero.png',
-            fit: BoxFit.contain,
-            alignment: Alignment.bottomRight,
-            cacheHeight: 720,
-            excludeFromSemantics: true),
-      ),
       Padding(
         padding: EdgeInsets.fromLTRB(
             HomeScreen._gutter, top + AppSpace.sm, HomeScreen._gutter, 0),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _Header(hasUpdate: hasUpdate),
-          const SizedBox(height: AppSpace.xl),
-          _Promise(firstOffer: firstOffer),
-          const SizedBox(height: AppSpace.xl),
+          const SizedBox(height: AppSpace.md),
+          // The promise on the left, our expert on the right. He stands
+          // on the cards' top edge (the crop at his waist hides under it).
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.xl),
+                child: _Promise(firstOffer: firstOffer),
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(AppSpace.sm, AppSpace.md),
+              child: Image.asset('assets/images/pro_hero.png',
+                  height: 196,
+                  fit: BoxFit.contain,
+                  cacheHeight: 600,
+                  excludeFromSemantics: true),
+            ),
+          ]),
           _ActionCards(car: car),
         ]),
       ),
@@ -286,60 +291,55 @@ class _Promise extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = firstOffer;
     final off = o?.headline.replaceAll('OFF', 'off');
-    return FractionallySizedBox(
-      widthFactor: 0.6,
-      alignment: Alignment.centerLeft,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Semantics(
-          header: true,
-          label: 'A spotless car, right where it\'s parked',
-          // Always three lines. 32px is already large text, so it isn't
-          // scaled up; on narrow phones it shrinks just enough to fit.
-          child: ExcludeSemantics(
-            child: MediaQuery.withNoTextScaling(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text.rich(
-                  const TextSpan(children: [
-                    TextSpan(text: 'A spotless car,\n'),
-                    TextSpan(
-                        text: 'right where\n',
-                        style: TextStyle(
-                            color: AppColors.brand,
-                            fontWeight: FontWeight.w800)),
-                    TextSpan(text: 'it\'s parked'),
-                  ]),
-                  style: AppText.hero.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.5),
-                ),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Semantics(
+        header: true,
+        label: 'A spotless car, right where it\'s parked',
+        // Always three lines. 32px is already large text, so it isn't
+        // scaled up; on narrow phones it shrinks just enough to fit.
+        child: ExcludeSemantics(
+          child: MediaQuery.withNoTextScaling(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text.rich(
+                const TextSpan(children: [
+                  TextSpan(text: 'A spotless car,\n'),
+                  TextSpan(
+                      text: 'right where\n',
+                      style: TextStyle(
+                          color: AppColors.brand, fontWeight: FontWeight.w800)),
+                  TextSpan(text: 'it\'s parked'),
+                ]),
+                style: AppText.hero.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.5),
               ),
             ),
           ),
         ),
-        const SizedBox(height: AppSpace.md),
-        Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
-          if (kPayAfterService)
-            const _HeroPill('Pay after the service', icon: Icons.check_rounded),
-          if (o != null)
-            Semantics(
-              button: true,
-              label: '$off your first booking. Code ${o.code}. Tap to copy',
-              child: ExcludeSemantics(
-                child: GestureDetector(
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: o.code));
-                    showMessage(context, 'Code ${o.code} copied');
-                  },
-                  child: _HeroPill('$off · ${o.code}', bright: true),
-                ),
+      ),
+      const SizedBox(height: AppSpace.md),
+      Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+        if (kPayAfterService)
+          const _HeroPill('Pay after the service', icon: Icons.check_rounded),
+        if (o != null)
+          Semantics(
+            button: true,
+            label: '$off your first booking. Code ${o.code}. Tap to copy',
+            child: ExcludeSemantics(
+              child: GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: o.code));
+                  showMessage(context, 'Code ${o.code} copied');
+                },
+                child: _HeroPill('$off · ${o.code}', bright: true),
               ),
             ),
-        ]),
+          ),
       ]),
-    );
+    ]);
   }
 }
 
@@ -389,7 +389,7 @@ class _ActionCards extends StatelessWidget {
         Expanded(
           child: _ActionCard(
             title: 'Car wash',
-            line: 'Outside, inside or both',
+            line: 'Outside and inside',
             from: cheapestIn(ServiceCategory.wash),
             image: 'assets/images/icon3d_wash.png',
             onTap: () => context.go('/services?cat=wash'),
@@ -479,9 +479,9 @@ class _ActionCard extends StatelessWidget {
                         Align(
                           alignment: Alignment.bottomRight,
                           child: Image.asset(image,
-                              height: 84,
+                              height: 76,
                               fit: BoxFit.contain,
-                              cacheHeight: 252,
+                              cacheHeight: 228,
                               excludeFromSemantics: true),
                         ),
                       ]),
@@ -590,15 +590,9 @@ class _PopularServices extends StatelessWidget {
     'full-package': 'assets/images/pro_full_package.jpg',
   };
 
-  /// Shown on Home, in this order (the rest are one tap away in "See all").
-  static const _popular = [
-    'wash-full',
-    'wash-exterior',
-    'wash-interior',
-    'wash-bucket',
-    'dry-cleaning',
-    'full-package',
-  ];
+  /// Three on Home, one of each kind (the rest are one tap away in "See all"):
+  /// the most booked wash, the cheapest, and the full detailing.
+  static const _popular = ['wash-full', 'wash-bucket', 'full-package'];
 
   @override
   Widget build(BuildContext context) {
@@ -715,7 +709,8 @@ class _ServiceTile extends StatelessWidget {
 }
 
 // ── Monthly plan ─────────────────────────────────────────────────────────────
-/// The 3-wash plan (Best value) as a dark card. The price follows the car.
+/// The 3-wash plan as a light mint card with the 3D calendar. The price
+/// follows the car.
 class _MonthlyCard extends StatelessWidget {
   final CarType? car;
   const _MonthlyCard({required this.car});
@@ -725,26 +720,26 @@ class _MonthlyCard extends StatelessWidget {
     final plan = serviceById('monthly-3')!;
     final amount = car == null ? plan.fromPrice : plan.priceFor(car!);
     final price = '${car == null ? 'From ' : ''}${rupees(amount)}';
-    void open() => context.go('/services?cat=monthly');
 
     return Semantics(
       button: true,
       label: 'Monthly plan, best value. Clean all month, book once. '
           '3 full washes at your door. $price a month',
       child: ExcludeSemantics(
-        child: GestureDetector(
-          onTap: open,
-          child: ClipRRect(
+        child: PressScale(
+          child: Material(
+            color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            child: ColoredBox(
-              color: AppColors.ink,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => context.go('/services?cat=monthly'),
               child: Stack(children: [
                 Positioned(
-                  right: -6,
-                  bottom: -8,
+                  right: -4,
+                  bottom: -6,
                   child: Image.asset('assets/images/icon3d_calendar.png',
-                      height: 128,
-                      cacheHeight: 384,
+                      height: 116,
+                      cacheHeight: 348,
                       excludeFromSemantics: true),
                 ),
                 Padding(
@@ -755,28 +750,21 @@ class _MonthlyCard extends StatelessWidget {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('MONTHLY PLAN · BEST VALUE',
-                              style: AppText.overline
-                                  .copyWith(color: AppColors.brand)),
-                          const SizedBox(height: 6),
+                          const Pill('Best value', tone: PillTone.solid),
+                          const SizedBox(height: AppSpace.sm),
                           Text('Clean all month.\nBook once.',
-                              style: AppText.h3
-                                  .copyWith(color: Colors.white, height: 1.15)),
-                          const SizedBox(height: 6),
-                          Text('3 full washes at your door',
+                              style: AppText.h3.copyWith(height: 1.15)),
+                          const SizedBox(height: AppSpace.xs),
+                          Text('Monthly plan · 3 full washes at your door',
                               style: AppText.small
-                                  .copyWith(color: const Color(0xFFB8C0C7))),
-                          const SizedBox(height: AppSpace.lg),
+                                  .copyWith(color: AppColors.primaryDk)),
+                          const SizedBox(height: AppSpace.md),
                           Text.rich(
                             TextSpan(children: [
                               TextSpan(text: price),
-                              TextSpan(
-                                  text: ' /month',
-                                  style: AppText.small.copyWith(
-                                      color: const Color(0xFFB8C0C7))),
+                              TextSpan(text: ' /month', style: AppText.small),
                             ]),
-                            style:
-                                AppText.priceSm.copyWith(color: Colors.white),
+                            style: AppText.priceSm,
                           ),
                         ]),
                   ),
