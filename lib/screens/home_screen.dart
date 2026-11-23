@@ -563,16 +563,17 @@ class _PopularServices extends StatelessWidget {
   final CarType? car;
   const _PopularServices({required this.car});
 
-  /// Home photos, one per service, all from the same shoot.
+  /// Home photos, one per service: close-ups of the job from the same shoot
+  /// (same car, gloves, white studio), so each tile looks different.
   static const photos = {
-    'wash-full': 'assets/images/pro_full_wash.jpg',
-    'wash-exterior': 'assets/images/pro_exterior.jpg',
-    'wash-interior': 'assets/images/pro_interior.jpg',
-    'wash-bucket': 'assets/images/pro_bucket.jpg',
-    'dry-cleaning': 'assets/images/pro_dry_clean.jpg',
-    'rubbing-exterior': 'assets/images/pro_rubbing.jpg',
-    '3m-wax-exterior': 'assets/images/pro_wax.jpg',
-    'full-package': 'assets/images/pro_full_package.jpg',
+    'wash-full': 'assets/images/cu_full_wash.jpg',
+    'wash-exterior': 'assets/images/cu_exterior.jpg',
+    'wash-interior': 'assets/images/cu_interior.jpg',
+    'wash-bucket': 'assets/images/cu_bucket.jpg',
+    'dry-cleaning': 'assets/images/cu_dry_clean.jpg',
+    'rubbing-exterior': 'assets/images/cu_rubbing.jpg',
+    '3m-wax-exterior': 'assets/images/cu_wax.jpg',
+    'full-package': 'assets/images/cu_full_package.jpg',
   };
 
   /// Three on Home, one of each kind (the rest are one tap away in "See all"):
