@@ -13,7 +13,7 @@ Rules for turning Figma designs into code in this repo. Read this before impleme
 | UI framework | Flutter (Material 3, `useMaterial3: true`), Dart SDK `>=3.3.0 <4.0.0` |
 | State | `flutter_riverpod` 2.x (`Provider`, `StateNotifierProvider`, `StreamProvider`) in `lib/providers/app_providers.dart` |
 | Navigation | `go_router` 14 in `lib/core/router.dart`. Tabs live in a `ShellRoute` (`MainShell`); everything else is a pushed route |
-| Fonts | `google_fonts`, **Manrope**, bundled in `assets/google_fonts/` (runtime fetching is off) |
+| Fonts | **Manrope**, one font family with five weights (400–800) declared in `pubspec.yaml` from `assets/google_fonts/`, so `copyWith(fontWeight: …)` works. `test/flutter_test_config.dart` loads it for tests |
 | Backend | **ShineStaff** (the owner's booking and worker system) through the API in `docs/API_CONTRACT.md` (`lib/data/api/`). Firebase Auth is used only for the customer's phone OTP (`lib/data/auth_service.dart`). Test builds run an in-app fake server instead (see section 9) |
 | Build | Flutter tooling only (no web bundler or CSS pipeline). `flutter build web --release` / Android / iOS |
 | Styling | Plain Flutter widgets + `ThemeData`. No CSS, no styled-components, no Tailwind |
@@ -179,7 +179,7 @@ Scaffold(
 |---|---|---|
 | Photos | `assets/images/*.jpg` (~3.5 MB total, pre-compressed JPEGs) | `Image.asset('assets/images/wash_collage.jpg', fit: BoxFit.cover)`, or through `ServiceImage` |
 | Logo | `assets/images/logo.png` | Also the launcher-icon source (`flutter_launcher_icons`) |
-| Fonts | `assets/google_fonts/Manrope-*.ttf` (Regular, Medium, SemiBold, Bold, ExtraBold) | Loaded by `google_fonts` from the bundle; files must be named `Family-Weight.ttf` |
+| Fonts | `assets/google_fonts/Manrope-*.ttf` (Regular, Medium, SemiBold, Bold, ExtraBold) | Declared in `pubspec.yaml` as the `Manrope` family; a new weight needs a new entry there |
 | Splash source art | `design/splash/` (not bundled) | Regenerate: `dart run flutter_native_splash:create` |
 | Web icons | `web/icons/`, `web/favicon.png` | |
 

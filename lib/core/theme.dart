@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 // ── CleanCruisers design tokens ───────────────────────────────────────────────
 // Every screen should pull colour, spacing, radius, shadow and type from here.
@@ -69,18 +68,21 @@ class AppShadow {
 class AppText {
   static TextStyle _f(double size, FontWeight w, Color c,
           {double? h, double ls = 0}) =>
-      GoogleFonts.manrope(
+      TextStyle(
+          fontFamily: kFontFamily,
           fontSize: size,
           fontWeight: w,
           color: c,
           height: h,
           letterSpacing: ls);
 
-  /// [s] in another weight. Use this instead of `copyWith(fontWeight:)`:
-  /// each Manrope weight is its own font file, and copyWith keeps the old
-  /// file, so the weight would not change.
+  /// Manrope, bundled as one font family with all five weights (pubspec),
+  /// so `copyWith(fontWeight: …)` picks the right font file.
+  static const kFontFamily = 'Manrope';
+
+  /// [s] in another weight (same as `copyWith(fontWeight: w)`).
   static TextStyle weight(TextStyle s, FontWeight w) =>
-      GoogleFonts.manrope(textStyle: s, fontWeight: w);
+      s.copyWith(fontWeight: w);
 
   /// The Home hero headline: the strongest text in the app.
   static TextStyle get hero =>
@@ -165,7 +167,8 @@ class AppTheme {
         outline: AppColors.border,
         error: AppColors.error,
       ),
-      textTheme: GoogleFonts.manropeTextTheme(base.textTheme).apply(
+      textTheme: base.textTheme.apply(
+        fontFamily: AppText.kFontFamily,
         bodyColor: AppColors.text,
         displayColor: AppColors.text,
       ),

@@ -31,12 +31,13 @@ Future<void> loadFonts() async {
   final loader = FontLoader('MaterialIcons')
     ..addFont(Future.value(ByteData.view(icons.readAsBytesSync().buffer)));
   await loader.load();
+  // One family with all weights, like pubspec.yaml.
+  final manrope = FontLoader('Manrope');
   for (final w in ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold']) {
     final f = File('assets/google_fonts/Manrope-$w.ttf');
-    final l = FontLoader('Manrope_$w')
-      ..addFont(Future.value(ByteData.view(f.readAsBytesSync().buffer)));
-    await l.load();
+    manrope.addFont(Future.value(ByteData.view(f.readAsBytesSync().buffer)));
   }
+  await manrope.load();
 }
 
 Future<void> shoot(WidgetTester tester, String name, Widget screen,
