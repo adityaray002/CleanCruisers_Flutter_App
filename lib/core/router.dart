@@ -112,7 +112,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/login/address', builder: (_, __) => const AddressScreen()),
       if (kFakeServer)
-        GoRoute(path: '/test-tools', builder: (_, __) => const TestToolsScreen()),
+        GoRoute(
+            path: '/test-tools', builder: (_, __) => const TestToolsScreen()),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),
         routes: [

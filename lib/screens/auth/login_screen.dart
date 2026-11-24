@@ -111,6 +111,10 @@ class _AuthScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
+    // With the keyboard open the big photo would push the field out of
+    // sight (a tall keyboard leaves ~350 px), so it steps aside.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final showHero = hero && !keyboard;
     final head =
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (step != null && steps != null) ...[
@@ -140,7 +144,7 @@ class _AuthScaffold extends StatelessWidget {
     ]);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: hero
+      value: showHero
           ? AppTheme.overlayDark.copyWith(
               statusBarIconBrightness: Brightness.light,
               statusBarBrightness: Brightness.dark,
@@ -148,24 +152,24 @@ class _AuthScaffold extends StatelessWidget {
           : SystemUiOverlayStyle.dark
               .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
-        backgroundColor: hero ? AppColors.ink : AppColors.bg,
+        backgroundColor: showHero ? AppColors.ink : AppColors.bg,
         body: MediaQuery.withClampedTextScaling(
           maxScaleFactor: 1.15,
           child: Column(children: [
-            if (hero) _HeroHeader(top: top),
+            if (showHero) _HeroHeader(top: top),
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: AppColors.bg,
-                  borderRadius: hero
+                  borderRadius: showHero
                       ? const BorderRadius.vertical(
                           top: Radius.circular(AppRadius.lg))
                       : null,
                 ),
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(AppSpace.page,
-                      hero ? 26 : top + AppSpace.md, AppSpace.page, 24),
+                      showHero ? 26 : top + AppSpace.md, AppSpace.page, 24),
                   children: [
                     if (showBack) ...[
                       Align(
@@ -484,8 +488,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 TextButton(
                   onPressed: _resend,
                   style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 44)),
+                      padding: EdgeInsets.zero, minimumSize: const Size(0, 44)),
                   child: const Text('Resend code'),
                 ),
             ]),
@@ -568,9 +571,8 @@ class _NameScreenState extends ConsumerState<NameScreen> {
             carModel: _model.text.trim(),
           ));
       // The server keeps the name and car (admin screens, invoices).
-      await ref
-          .read(apiProvider)
-          .updateMe(name: _name.text.trim(), car: ApiCar(_car!, _model.text.trim()));
+      await ref.read(apiProvider).updateMe(
+          name: _name.text.trim(), car: ApiCar(_car!, _model.text.trim()));
       await auth.saveName(_name.text);
       ref.invalidate(meProvider);
       // The router moves on once the name is saved.
