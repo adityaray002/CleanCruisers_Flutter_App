@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 // ── CleanCruisers design tokens ───────────────────────────────────────────────
 // Every screen should pull colour, spacing, radius, shadow and type from here.
@@ -12,6 +11,7 @@ class AppColors {
   static const primaryDk = Color(0xFF166534);
   static const primarySoft = Color(0xFFE8F7EE); // tinted backgrounds
   static const ink = Color(0xFF0B0F10); // brand black — hero, splash
+  static const forest = Color(0xFF083322); // deep green — Home hero overlay
 
   // Neutrals
   static const bg = Color(0xFFF5F6F8);
@@ -20,7 +20,7 @@ class AppColors {
   static const border = Color(0xFFE3E6EA);
   static const text = Color(0xFF111827);
   static const textMuted = Color(0xFF4B5563);
-  static const textSubtle = Color(0xFF6B7280);
+  static const textSubtle = Color(0xFF5A6270);
 
   // Status
   static const error = Color(0xFFDC2626);
@@ -37,14 +37,16 @@ class AppSpace {
   static const lg = 16.0;
   static const xl = 20.0;
   static const xxl = 24.0;
-  static const section = 36.0;
+  static const section = 32.0;
   static const page = 20.0; // horizontal page gutter
 }
 
 class AppRadius {
   static const sm = 10.0;
+  static const thumb = 12.0; // small photos in list rows
   static const md = 14.0;
   static const lg = 20.0;
+  static const sheet = 28.0; // content sheet over a hero photo
   static const pill = 999.0;
 }
 
@@ -58,38 +60,88 @@ class AppShadow {
   ];
 }
 
+/// Type scale (Manrope), size/line-height: Home hero 32/38 800, display
+/// 30/36 800, screen 24/30 800, section 20/26 800, card 16/22 700,
+/// price 22/28 800, button 16/700, body 14/20 400, secondary 13/400,
+/// labels 12/600, bottom nav 12/16 600.
+/// Recolour with `copyWith(color: …)`; don't build new TextStyles.
 class AppText {
   static TextStyle _f(double size, FontWeight w, Color c,
           {double? h, double ls = 0}) =>
-      GoogleFonts.plusJakartaSans(
+      TextStyle(
+          fontFamily: kFontFamily,
           fontSize: size,
           fontWeight: w,
           color: c,
           height: h,
           letterSpacing: ls);
 
+  /// Manrope, bundled as one font family with all five weights (pubspec),
+  /// so `copyWith(fontWeight: …)` picks the right font file.
+  static const kFontFamily = 'Manrope';
+
+  /// [s] in another weight (same as `copyWith(fontWeight: w)`).
+  static TextStyle weight(TextStyle s, FontWeight w) =>
+      s.copyWith(fontWeight: w);
+
+  /// The Home hero headline: the strongest text in the app.
+  static TextStyle get hero =>
+      _f(32, FontWeight.w800, AppColors.text, h: 38 / 32, ls: -0.8);
+
+  /// Big headings (dark status cards, sign-in hero, splash).
   static TextStyle get display =>
-      _f(30, FontWeight.w800, AppColors.text, h: 1.15, ls: -0.6);
+      _f(30, FontWeight.w800, AppColors.text, h: 36 / 30, ls: -0.6);
+
+  /// Screen headings.
   static TextStyle get h1 =>
-      _f(24, FontWeight.w800, AppColors.text, h: 1.2, ls: -0.4);
+      _f(24, FontWeight.w800, AppColors.text, h: 30 / 24, ls: -0.4);
+
+  /// Section headings.
   static TextStyle get h2 =>
-      _f(19, FontWeight.w700, AppColors.text, h: 1.25, ls: -0.2);
-  static TextStyle get h3 => _f(16, FontWeight.w700, AppColors.text, h: 1.3);
+      _f(20, FontWeight.w800, AppColors.text, h: 26 / 20, ls: -0.3);
+
+  /// Card titles and step headings.
+  static TextStyle get h3 =>
+      _f(16, FontWeight.w700, AppColors.text, h: 22 / 16, ls: -0.2);
+
+  /// Titles of compact cards and tiles.
+  static TextStyle get title =>
+      _f(16, FontWeight.w600, AppColors.text, h: 1.35, ls: -0.1);
+
+  /// Body text.
   static TextStyle get body =>
-      _f(15, FontWeight.w400, AppColors.textMuted, h: 1.5);
+      _f(14, FontWeight.w400, AppColors.textMuted, h: 20 / 14);
   static TextStyle get bodyStrong =>
-      _f(15, FontWeight.w600, AppColors.text, h: 1.4);
+      _f(14, FontWeight.w600, AppColors.text, h: 1.45);
+
+  /// Secondary text.
   static TextStyle get small =>
       _f(13, FontWeight.w400, AppColors.textMuted, h: 1.45);
   static TextStyle get smallStrong =>
       _f(13, FontWeight.w600, AppColors.text, h: 1.4);
+
+  /// Small labels.
   static TextStyle get caption =>
-      _f(12, FontWeight.w500, AppColors.textSubtle, h: 1.35);
+      _f(12, FontWeight.w600, AppColors.textSubtle, h: 1.35);
+
+  /// ALL-CAPS small labels.
   static TextStyle get overline =>
-      _f(11, FontWeight.w700, AppColors.textSubtle, ls: 1.1);
+      _f(12, FontWeight.w600, AppColors.textSubtle, ls: 1.0);
+
+  /// Prices.
   static TextStyle get price =>
-      _f(22, FontWeight.w800, AppColors.text, ls: -0.3);
-  static TextStyle get button => _f(15, FontWeight.w700, Colors.white);
+      _f(22, FontWeight.w800, AppColors.text, h: 28 / 22, ls: -0.4);
+
+  /// Prices inside dense rows and tiles, where 24 would crowd the layout.
+  static TextStyle get priceSm =>
+      _f(18, FontWeight.w800, AppColors.text, h: 1.25, ls: -0.2);
+
+  /// Buttons (set by the button themes).
+  static TextStyle get button => _f(16, FontWeight.w700, Colors.white);
+
+  /// Bottom navigation labels.
+  static TextStyle get nav =>
+      _f(12, FontWeight.w600, AppColors.textSubtle, h: 16 / 12);
 }
 
 class AppTheme {
@@ -115,7 +167,8 @@ class AppTheme {
         outline: AppColors.border,
         error: AppColors.error,
       ),
-      textTheme: GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
+      textTheme: base.textTheme.apply(
+        fontFamily: AppText.kFontFamily,
         bodyColor: AppColors.text,
         displayColor: AppColors.text,
       ),
@@ -126,7 +179,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         systemOverlayStyle: overlayDark,
-        titleTextStyle: AppText.h3.copyWith(fontSize: 17),
+        titleTextStyle: AppText.h3,
         iconTheme: const IconThemeData(color: AppColors.text),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -192,13 +245,10 @@ class AppTheme {
         indicatorColor: AppColors.primarySoft,
         height: 68,
         labelTextStyle:
-            WidgetStateProperty.resolveWith((s) => AppText.caption.copyWith(
+            WidgetStateProperty.resolveWith((s) => AppText.nav.copyWith(
                   color: s.contains(WidgetState.selected)
                       ? AppColors.primary
                       : AppColors.textSubtle,
-                  fontWeight: s.contains(WidgetState.selected)
-                      ? FontWeight.w700
-                      : FontWeight.w500,
                 )),
         iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
               color: s.contains(WidgetState.selected)

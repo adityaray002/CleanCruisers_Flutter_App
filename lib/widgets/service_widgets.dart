@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../core/format.dart';
+import '../core/pricing.dart';
 import '../core/theme.dart';
 import '../models/service.dart';
 import 'motion.dart';
@@ -175,8 +176,7 @@ class ServiceCard extends StatelessWidget {
                           const SizedBox(height: 170),
                           const Spacer(),
                           Text(service.name,
-                              style: AppText.h3
-                                  .copyWith(color: Colors.white, fontSize: 17),
+                              style: AppText.h3.copyWith(color: Colors.white),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 4),
@@ -202,7 +202,7 @@ class ServiceCard extends StatelessWidget {
                                           BorderRadius.circular(AppRadius.pill),
                                     ),
                                     child: Text(
-                                      '${service.samePriceForAll ? '' : 'Starts at '}${rupees(service.fromPrice)}${service.priceSuffix}',
+                                      '${service.samePriceForAll ? '' : 'From '}${rupees(service.fromPrice)}${service.priceSuffix}',
                                       style: AppText.smallStrong,
                                     ),
                                   ),
@@ -238,7 +238,8 @@ class ServiceCard extends StatelessWidget {
 /// Horizontal row used in the Services list.
 class ServiceRow extends StatelessWidget {
   final CarService service;
-  const ServiceRow(this.service, {super.key});
+  final CarType? car; // shows this car's exact price when known
+  const ServiceRow(this.service, {super.key, this.car});
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +267,8 @@ class ServiceRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis),
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: _PriceAndDuration(service, priceSize: 17)),
+              Expanded(
+                  child: _PriceAndDuration(service, priceSize: 17, car: car)),
               const Icon(Icons.chevron_right_rounded,
                   color: AppColors.textSubtle),
             ]),
@@ -278,11 +280,12 @@ class ServiceRow extends StatelessWidget {
 }
 
 /// Price and duration side by side; the duration moves to the next line when
-/// there isn't room (narrow phones, long prices like "Starts at ₹1,399 /month").
+/// there isn't room (narrow phones, long prices like "From ₹1,399 /month").
 class _PriceAndDuration extends StatelessWidget {
   final CarService service;
   final double priceSize;
-  const _PriceAndDuration(this.service, {required this.priceSize});
+  final CarType? car;
+  const _PriceAndDuration(this.service, {required this.priceSize, this.car});
 
   @override
   Widget build(BuildContext context) {
@@ -291,8 +294,8 @@ class _PriceAndDuration extends StatelessWidget {
       runSpacing: 2,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        PriceText(service.fromPrice,
-            from: !service.samePriceForAll,
+        PriceText(car == null ? service.fromPrice : service.priceFor(car!),
+            from: car == null && !service.samePriceForAll,
             suffix: service.priceSuffix,
             size: priceSize),
         Row(mainAxisSize: MainAxisSize.min, children: [

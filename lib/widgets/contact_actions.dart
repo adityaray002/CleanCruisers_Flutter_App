@@ -12,24 +12,16 @@ Future<bool> openWhatsApp(BuildContext context, {String? message}) async {
   try {
     if (await launchUrl(url, mode: LaunchMode.externalApplication)) return true;
   } catch (_) {}
+  // No phone calls in the app: email is the fallback.
   if (context.mounted) {
     showMessage(
       context,
-      'Couldn\'t open WhatsApp. You can call us on $kPhoneDisplay instead.',
-      action: SnackBarAction(label: 'Call', onPressed: () => callUs(context)),
+      'Couldn\'t open WhatsApp. You can email us at $kEmail.',
+      action: SnackBarAction(
+          label: 'Email', onPressed: () => openLink(context, 'mailto:$kEmail')),
     );
   }
   return false;
-}
-
-Future<void> callUs(BuildContext context) async {
-  try {
-    if (await launchUrl(Uri.parse('tel:$kPhone'))) return;
-  } catch (_) {}
-  if (context.mounted) {
-    showMessage(
-        context, 'Couldn\'t start a call. Our number is $kPhoneDisplay.');
-  }
 }
 
 Future<void> openLink(BuildContext context, String url) async {

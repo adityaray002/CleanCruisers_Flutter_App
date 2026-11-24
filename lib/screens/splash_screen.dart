@@ -114,8 +114,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           text: 'CRUISERS',
                           style: TextStyle(color: AppColors.primary)),
                     ]),
-                    style: AppText.display.copyWith(
-                        color: AppColors.text, fontSize: 30, letterSpacing: 3),
+                    style: AppText.display
+                        .copyWith(color: AppColors.text, letterSpacing: 3),
                   ),
                 ),
               ),

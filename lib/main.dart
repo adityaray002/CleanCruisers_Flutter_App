@@ -3,12 +3,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
+import 'firebase_options.dart';
+import 'models/service.dart' show useServerPrices;
+import 'providers/api_providers.dart';
 import 'providers/app_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final firebaseOptions = CleanCruisersFirebaseOptions.current;
+  if (firebaseOptions != null) {
+    await Firebase.initializeApp(options: firebaseOptions);
+  }
   // Brand font is bundled in assets/google_fonts — no network needed.
   GoogleFonts.config.allowRuntimeFetching = false;
   final prefs = await SharedPreferences.getInstance();
@@ -32,6 +40,14 @@ class CleanCruisersApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Prices shown everywhere follow the server's catalog once it loads.
+    final c = ref.watch(catalogProvider).valueOrNull;
+    if (c != null) {
+      useServerPrices({
+        for (final s in c.services) s.id: s.prices,
+        for (final p in c.plans) p.id: p.prices,
+      });
+    }
     return MaterialApp.router(
       title: 'CleanCruisers',
       debugShowCheckedModeBanner: false,

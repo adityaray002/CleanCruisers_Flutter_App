@@ -5,6 +5,46 @@ import '../core/theme.dart';
 import 'motion.dart';
 
 // ── Buttons ───────────────────────────────────────────────────────────────────
+/// Button roles, used the same way on every screen:
+/// - [PrimaryButton] (solid green): the one main action of a screen —
+///   Book, Request slot, Track booking.
+/// - [InlineButton] (green outline): acting on one item in a list —
+///   Book on a service card, Add on an add-on, Use / Apply on an offer.
+/// Labels are sentence case ("Add", not "ADD").
+class InlineButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final bool expand;
+  const InlineButton(
+      {super.key,
+      required this.label,
+      required this.onPressed,
+      this.expand = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = OutlinedButton(
+      onPressed: onPressed == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onPressed!();
+            },
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(76, 40),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+        foregroundColor: AppColors.primary,
+        side: const BorderSide(color: AppColors.primary, width: 1.3),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm)),
+      ),
+      child: Text(label,
+          style: AppText.smallStrong.copyWith(color: AppColors.primary)),
+    );
+    return expand ? SizedBox(width: double.infinity, child: btn) : btn;
+  }
+}
+
 class PrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -134,7 +174,8 @@ class AppCard extends StatelessWidget {
             color: selected ? AppColors.primary : AppColors.border,
             width: selected ? 1.8 : 1,
           ),
-          boxShadow: selected ? null : AppShadow.card,
+          // A shadow means "you can tap this"; display-only cards stay flat.
+          boxShadow: selected || onTap == null ? null : AppShadow.card,
         ),
         child: Material(
           color: Colors.transparent,
@@ -193,7 +234,9 @@ class SectionHeader extends StatelessWidget {
 }
 
 // ── Pills / badges ────────────────────────────────────────────────────────────
-enum PillTone { neutral, brand, dark, warning }
+/// neutral: facts (grey) · brand: soft green · solid: filled green, for
+/// highlights like "Best value" · dark: over photos · warning: amber.
+enum PillTone { neutral, brand, solid, dark, warning }
 
 class Pill extends StatelessWidget {
   final String label;
@@ -207,22 +250,30 @@ class Pill extends StatelessWidget {
     final (bg, fg) = switch (tone) {
       PillTone.neutral => (AppColors.surfaceAlt, AppColors.textMuted),
       PillTone.brand => (AppColors.primarySoft, AppColors.primaryDk),
+      PillTone.solid => (AppColors.primary, Colors.white),
       PillTone.dark => (const Color(0xCC0B0F10), Colors.white),
       PillTone.warning => (AppColors.warningSoft, AppColors.warning),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: 5)
-        ],
-        Text(label,
-            style: AppText.caption
-                .copyWith(color: fg, fontWeight: FontWeight.w700)),
-      ]),
+      // One Text.rich (icon inline) so a long label wraps instead of
+      // overflowing when the pill is narrower than its text.
+      child: Text.rich(
+        TextSpan(children: [
+          if (icon != null)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: Icon(icon, size: 14, color: fg),
+              ),
+            ),
+          TextSpan(text: label),
+        ]),
+        style: AppText.caption.copyWith(color: fg, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
@@ -254,8 +305,7 @@ class CheckItem extends StatelessWidget {
         Expanded(
           child: Text(text,
               style: AppText.body.copyWith(
-                  color: included ? AppColors.text : AppColors.textMuted,
-                  fontSize: 14.5)),
+                  color: included ? AppColors.text : AppColors.textMuted)),
         ),
       ]),
     );
@@ -291,7 +341,7 @@ class InfoRow extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: AppText.caption),
             const SizedBox(height: 2),
-            Text(value, style: AppText.bodyStrong.copyWith(fontSize: 14.5)),
+            Text(value, style: AppText.bodyStrong),
           ]),
         ),
         if (trailing != null) trailing!,
@@ -340,7 +390,7 @@ class PriceText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text.rich(
       TextSpan(children: [
-        if (from) TextSpan(text: 'Starts at ', style: AppText.caption),
+        if (from) TextSpan(text: 'From ', style: AppText.caption),
         TextSpan(
             text: rupees(amount),
             style: AppText.price.copyWith(fontSize: size)),

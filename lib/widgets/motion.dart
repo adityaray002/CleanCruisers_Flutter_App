@@ -34,6 +34,9 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
     if (_c.isAnimating || _c.isCompleted) return;
     if (reduceMotion(context)) {
       _c.value = 1;
+    } else if (widget.delay == Duration.zero) {
+      // No timer when there is no delay: it starts on the next frame anyway.
+      _c.forward();
     } else {
       Future.delayed(widget.delay, () {
         if (mounted) _c.forward();

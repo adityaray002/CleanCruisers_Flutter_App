@@ -97,7 +97,6 @@ lib/
 └── widgets/
     ├── ui.dart                 — Buttons, cards, pills, empty states, bottom action bar
     ├── service_widgets.dart    — Service image, card and row
-    ├── how_it_works.dart
     └── contact_actions.dart    — WhatsApp / call / link helpers with error handling
 ```
 
@@ -108,12 +107,21 @@ lib/
 - **Hours, areas, rating, customer count, reviews, gallery** — `lib/data/business_info.dart`.
   Set a figure to `null` (or empty the reviews list) to hide it instead of showing something unverified.
 
-## How booking works
+## How booking works now
 
-There is no backend. A booking builds a WhatsApp message (with a `CC-XXXXX` reference) to the
-business number; the customer taps Send, and the team confirms on WhatsApp. The booking and the
-customer's details are saved on the device (SharedPreferences) so they appear under **Bookings** and
-pre-fill the next booking.
+Customer booking requests are submitted to a shared Firebase/Firestore record. The customer picks a
+preferred one-hour arrival window; staff check worker availability, road distance, drive time and
+service duration before confirming it. Booking support can still use WhatsApp, but the booking
+request itself does not leave the app.
+
+The app needs Firebase configuration before online booking and staff access can work. Follow
+[docs/OPERATIONS_MVP_SETUP.md](docs/OPERATIONS_MVP_SETUP.md) to connect the project, enable guest
+and staff sign-in, deploy Firestore rules, and create the owner account. Without configuration,
+the app shows a clear setup message instead of claiming a booking was received.
+
+Customer profile details are still saved locally to prefill later bookings. Central booking status
+is available on the same authenticated app installation. Account recovery and cross-device booking
+history need customer phone/email sign-in, which is not enabled in this first version.
 
 Fonts: Plus Jakarta Sans is bundled in `assets/google_fonts/` (SIL OFL, see `OFL.txt`), so no font is
 downloaded at runtime.

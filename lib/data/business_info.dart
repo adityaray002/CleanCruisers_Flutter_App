@@ -6,28 +6,48 @@
 // in one place. Only put information here that is true today. Anything set to
 // null / empty is simply hidden in the UI.
 
-// Service hours. Booking time slots are generated from these.
-const kOpenHour = 7; // 7 AM
-const kCloseHour = 20; // 8 PM
-const kHoursLabel = '7 AM – 8 PM';
+// Customer-facing booking hours follow the current operating plan.
+const kOpenHour = 8; // workers leave around 8 AM
+const kCloseHour = 18; // every customer's car work must finish by 6 PM
+const kHoursLabel = '8 AM – 6 PM';
 const kDaysLabel = 'All 7 days';
 
 const kCityLabel = 'Delhi NCR';
-
-// How quickly the team replies to a WhatsApp booking request.
-const kConfirmWithin = '30 minutes';
 
 // Payment model. The app does not take payments; customers pay the team
 // after the service is done.
 const kPayAfterService = true;
 
+// How long the team usually takes to confirm a slot request (owner,
+// 15 Nov 2026). Shown on the booking page and after a request is sent.
+const kConfirmUsually = '1–2 hours';
+
 // ── Social proof ──────────────────────────────────────────────────────────────
 // TODO(business): confirm these are current before each release. Set to null
 // to hide a figure rather than showing an unverified number.
-const String? kRatingValue = '4.9'; // average rating
+// Rating and customer count are hidden until they are verified. When you
+// re-enable the rating, also set kRatingSource so customers can check it.
+const String? kRatingValue = null; // average rating, e.g. '4.9'
 const String? kRatingSource = null; // e.g. 'Google' — shown as "4.9 on Google"
-const String? kCustomersServed = '1000+';
+const String? kCustomersServed = null; // e.g. '1000+'
 const String? kEstablished = '2020';
+
+// Our own work (same car, before and after our cleaning); confirmed by the
+// owner on 13 Nov 2026 (assets/images/wheel_before_after.jpg). Hidden on
+// Home since 23 Nov 2026: the street photo doesn't match the Home studio
+// photos. Set it back (or to a studio-style before/after) to show the
+// "See the difference" card again.
+const String? kBeforeAfterPhoto = null;
+
+// The last picture on Home, under "Relax, your car is in expert hands": our
+// expert, arms crossed, in front of a line-drawn city (prompt in
+// docs/HOME_ILLUSTRATION_BRIEF.md; the badge is the real logo pasted on).
+// null hides it.
+const String? kTrustPhoto = 'assets/images/trust_expert.jpg';
+
+// TODO(business): set to true only once the team really uses water-saving
+// methods and eco-friendly products. Shows the green banner on Home.
+const kEcoFriendly = false;
 
 class Review {
   final String name, area, text;
@@ -38,19 +58,7 @@ class Review {
 // TODO(business): replace with real, attributable customer reviews
 // (e.g. copied from Google Business Profile). Leave the list empty to hide
 // the reviews section.
-const kReviews = <Review>[
-  Review(
-      'Priya S.',
-      'South Delhi',
-      'Amazing! They came on time, car looks showroom clean. Will book again!',
-      5),
-  Review('Rahul M.', 'Dwarka',
-      'Very professional team. Best doorstep car wash in Delhi!', 5),
-  Review('Anjali K.', 'Janakpuri',
-      'Booked on WhatsApp, team arrived in 30 mins. Perfectly done.', 5),
-  Review('Sanjay T.', 'Uttam Nagar',
-      'Monthly package saves so much time. Three washes at doorstep!', 5),
-];
+const kReviews = <Review>[];
 
 const kServiceAreas = [
   'Dwarka',

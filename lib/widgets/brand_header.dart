@@ -1,0 +1,236 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/pricing.dart';
+import '../core/theme.dart';
+import '../models/address.dart';
+import '../providers/app_providers.dart';
+import 'customer_sheets.dart';
+
+/// Logo + "CleanCruisers" wordmark, with where the car is parked underneath
+/// ([ParkedAtLine]). Shrinks to fit narrow rows.
+class BrandWithAddress extends StatelessWidget {
+  const BrandWithAddress({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      ClipOval(
+        child: Image.asset('assets/images/logo.png',
+            width: 40, height: 40, cacheWidth: 160, excludeFromSemantics: true),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Semantics(
+            header: true,
+            label: 'CleanCruisers, doorstep car care',
+            child: ExcludeSemantics(
+              child: Text.rich(
+                const TextSpan(children: [
+                  TextSpan(text: 'Clean'),
+                  TextSpan(
+                      text: 'Cruisers',
+                      style: TextStyle(color: AppColors.primary)),
+                ]),
+                maxLines: 1,
+                style: AppText.h3.copyWith(height: 1.2),
+              ),
+            ),
+          ),
+          const ParkedAtLine(),
+        ]),
+      ),
+    ]);
+  }
+}
+
+/// "🚗 Hatchback ⌄": the car whose prices the app shows. Opens the car
+/// sheet. Shows the saved model ("Swift") when there is one.
+class CarPill extends ConsumerWidget {
+  /// See-through white on a green band (Home), instead of a white pill.
+  final bool onDark;
+  const CarPill({super.key, this.onDark = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(profileProvider);
+    final model = p.carModel.trim();
+    final label = model.isNotEmpty
+        ? model.split(' ').last
+        : (p.car == null ? 'Your car' : carTypeNames[p.car]!);
+    // On narrow phones with no car picked, drop "Your car" so the location
+    // CTA beside it fits. Home also has a "Choose car" link under the
+    // section heading, so nothing is lost.
+    final roomy = MediaQuery.sizeOf(context).width /
+        MediaQuery.textScalerOf(context).scale(1);
+    final iconOnly = p.car == null && roomy < 380;
+    return Semantics(
+      button: true,
+      label: p.car == null
+          ? 'Choose your car to see exact prices'
+          : 'Prices for ${carTypeNames[p.car]}. Change car',
+      child: ExcludeSemantics(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 130, minHeight: 44),
+          child: RoundSurface(
+            onDark: onDark,
+            onTap: () => showCarSheet(context, ref),
+            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.directions_car_outlined,
+                  size: 18, color: onDark ? Colors.white : AppColors.primary),
+              if (!iconOnly) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.smallStrong.copyWith(
+                          color: onDark ? Colors.white : AppColors.text)),
+                ),
+              ],
+              Icon(Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color:
+                      onDark ? const Color(0xCCFFFFFF) : AppColors.textMuted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// White pill or circle with a hairline border (header chips). [onDark]
+/// makes it see-through white for a green band.
+class RoundSurface extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  final VoidCallback onTap;
+  final bool onDark;
+  const RoundSurface(
+      {super.key,
+      required this.child,
+      required this.padding,
+      required this.onTap,
+      this.onDark = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: onDark ? const Color(0x26FFFFFF) : AppColors.surface,
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+        border: Border.all(
+            color: onDark ? const Color(0x40FFFFFF) : AppColors.border),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const StadiumBorder(),
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// "📍 Home · <address> ⌄": where the car is parked, as one line under a
+/// heading. Tap to pick another address. With no address yet it reads
+/// "Set your car's location" in green, as a call to action.
+class ParkedAtLine extends ConsumerWidget {
+  /// Home header style: the place in bold with a chevron ("Home ⌄") and
+  /// the address under it.
+  final bool withOverline;
+
+  /// White text for the Home green band (only with [withOverline]).
+  final bool onDark;
+  const ParkedAtLine(
+      {super.key, this.withOverline = false, this.onDark = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sel = ref.watch(addressBookProvider).selected;
+    final place = sel == null ? null : addressLabelNames[sel.label]!;
+    final color = sel == null ? AppColors.primary : AppColors.textMuted;
+    if (withOverline) {
+      // Two lines like the big home-service apps: the place in bold with a
+      // chevron ("Home ⌄"), the address under it.
+      final title = sel == null ? 'Set location' : place!;
+      final line = sel == null ? 'Where is your car parked?' : sel.address;
+      final strong = onDark ? Colors.white : AppColors.text;
+      return Semantics(
+        button: true,
+        label: sel == null
+            ? 'Set where your car is parked'
+            : 'Car parked at $place, ${sel.address}. Change',
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: () => showAddressSheet(context, ref),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Flexible(
+                        child: Text(title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.h3.copyWith(
+                                color: strong, fontWeight: FontWeight.w800)),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 20, color: strong),
+                    ]),
+                    Text(line,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: onDark
+                                ? const Color(0xD9FFFFFF)
+                                : AppColors.textMuted)),
+                  ]),
+            ),
+          ),
+        ),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: sel == null
+          ? 'Set where your car is parked'
+          : 'Car parked at $place, ${sel.address}. Change',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () => showAddressSheet(context, ref),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 32),
+            child: Row(children: [
+              const Icon(Icons.location_on_outlined,
+                  size: 16, color: AppColors.primary),
+              const SizedBox(width: AppSpace.xs),
+              Flexible(
+                child: Text(
+                    sel == null
+                        ? 'Set your car\'s location'
+                        : '$place · ${sel.address}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: (sel == null ? AppText.smallStrong : AppText.small)
+                        .copyWith(color: color)),
+              ),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: color),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}

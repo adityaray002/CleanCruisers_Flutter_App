@@ -46,3 +46,8 @@ app.*.map.json
 
 # Android signing
 android/key.properties
+# Local only: secrets, browser profile, scratch
+.mcp.json
+chrome_temp/
+scratch/
+flutter_01.png

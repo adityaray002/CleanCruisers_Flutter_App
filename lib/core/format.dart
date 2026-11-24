@@ -51,6 +51,16 @@ String friendlyDate(DateTime d, {DateTime? now}) {
 
 DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+/// "+91 98765 43210"
+String phoneLabel(String tenDigits) => tenDigits.length == 10
+    ? '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}'
+    : '+91 $tenDigits';
+
+/// Calendar-day arithmetic. Adding Duration(days: n) breaks on days when
+/// clocks change (a 23- or 25-hour day), so step the day number instead.
+DateTime addDays(DateTime d, int days) =>
+    DateTime(d.year, d.month, d.day + days);
+
 String hourLabel(int h) {
   final hr = h % 12 == 0 ? 12 : h % 12;
   return '$hr ${h < 12 ? 'AM' : 'PM'}';
