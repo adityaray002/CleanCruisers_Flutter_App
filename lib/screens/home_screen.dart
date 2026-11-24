@@ -799,130 +799,156 @@ class _ServiceTile extends StatelessWidget {
     final from = car == null;
     final amount = rupees(from ? s.fromPrice : s.priceFor(car!));
 
-    // Like the big home-service apps: a photo with a small tag in its
-    // corner, then just the name and the price. The whole tile opens the
-    // service (with "Book" at the bottom of that page).
+    // A soft card: the photo with a floating time pill, a bold name, what
+    // you get, a hairline, then the price in green and a round arrow. The
+    // whole tile opens the service (its page has the Book button).
     return Semantics(
       button: true,
       label: '${s.name}. Takes ${s.duration}. '
           '${from ? 'From ' : ''}$amount. See details',
       child: ExcludeSemantics(
-        child: Material(
-          color: AppColors.surface,
-          shape: RoundedRectangleBorder(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            side: const BorderSide(color: AppColors.border),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x14101828),
+                  blurRadius: 14,
+                  offset: Offset(0, 5)),
+              BoxShadow(
+                  color: Color(0x0A101828),
+                  blurRadius: 2,
+                  offset: Offset(0, 1)),
+            ],
           ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              context.push('/service/${s.id}');
-            },
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: Stack(fit: StackFit.expand, children: [
-                      Image.asset(photo,
-                          fit: BoxFit.cover,
-                          cacheWidth: 360,
-                          excludeFromSemantics: true),
-                      // How long it takes, tucked into the top-right corner.
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 96),
-                          padding: const EdgeInsets.fromLTRB(7, 3, 8, 4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.only(
-                                bottomLeft: Radius.circular(AppRadius.sm)),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.schedule_rounded,
-                                  size: 12, color: AppColors.textSubtle),
-                              const SizedBox(width: 3),
-                              Text(s.duration,
-                                  maxLines: 1,
-                                  style: AppText.caption.copyWith(
-                                      color: AppColors.textMuted,
-                                      fontWeight: FontWeight.w500)),
-                            ]),
+          child: Material(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/service/${s.id}');
+              },
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 4 / 3,
+                      child: Stack(fit: StackFit.expand, children: [
+                        Image.asset(photo,
+                            fit: BoxFit.cover,
+                            cacheWidth: 360,
+                            excludeFromSemantics: true),
+                        // How long it takes, a white pill floating on the
+                        // photo's top-right corner.
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          left: 6,
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(6, 3, 8, 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                                boxShadow: const [
+                                  BoxShadow(
+                                      color: Color(0x1F101828),
+                                      blurRadius: 6,
+                                      offset: Offset(0, 2)),
+                                ],
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.schedule_rounded,
+                                          size: 13, color: AppColors.primaryDk),
+                                      const SizedBox(width: 3),
+                                      Text(s.duration,
+                                          maxLines: 1,
+                                          style: AppText.caption.copyWith(
+                                              color: AppColors.text,
+                                              fontWeight: FontWeight.w700)),
+                                    ]),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ]),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_PopularServices.shortNames[s.id] ?? s.listName,
-                              style: AppText.body.copyWith(
-                                  color: AppColors.text,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.25),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 2),
-                          // One line; shrinks a little on narrow tiles.
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                                _PopularServices.whatYouGet[s.id] ?? s.tagline,
-                                maxLines: 1,
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                _PopularServices.shortNames[s.id] ?? s.listName,
+                                style: AppText.weight(
+                                    AppText.body.copyWith(
+                                        color: AppColors.ink, height: 1.2),
+                                    FontWeight.w800),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 2),
+                            Text(_PopularServices.whatYouGet[s.id] ?? s.tagline,
+                                maxLines: 2,
                                 style: AppText.caption.copyWith(
                                     color: AppColors.textSubtle,
                                     fontWeight: FontWeight.w500)),
-                          ),
-                        ]),
-                  ),
-                  // Price at the bottom of every tile, so they line up,
-                  // with a small arrow that says "open".
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 0, 8, 10),
-                    child: Row(children: [
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text.rich(
-                            TextSpan(children: [
-                              if (from) const TextSpan(text: 'from '),
-                              TextSpan(
-                                  text: amount,
-                                  style: AppText.bodyStrong.copyWith(
-                                      color: AppColors.text,
-                                      fontWeight: FontWeight.w800)),
-                            ]),
-                            maxLines: 1,
-                            style: AppText.caption
-                                .copyWith(color: AppColors.textSubtle),
+                          ]),
+                    ),
+                    // Price at the bottom of every tile, so they line up.
+                    const Spacer(),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(10, 8, 10, 0),
+                      child: Divider(
+                          height: 1, thickness: 1, color: AppColors.border),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 7, 7, 8),
+                      child: Row(children: [
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text.rich(
+                              TextSpan(children: [
+                                if (from)
+                                  TextSpan(
+                                      text: 'FROM ',
+                                      style: AppText.caption.copyWith(
+                                          color: AppColors.textSubtle,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.4)),
+                                TextSpan(text: amount),
+                              ]),
+                              maxLines: 1,
+                              style: AppText.weight(
+                                  AppText.bodyStrong
+                                      .copyWith(color: AppColors.primaryDk),
+                                  FontWeight.w800),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: const BoxDecoration(
-                            color: AppColors.primarySoft,
-                            shape: BoxShape.circle),
-                        child: const Icon(Icons.arrow_forward_rounded,
-                            size: 14, color: AppColors.primary),
-                      ),
-                    ]),
-                  ),
-                ]),
+                        const SizedBox(width: 4),
+                        Container(
+                          width: 26,
+                          height: 26,
+                          decoration: const BoxDecoration(
+                              color: AppColors.primarySoft,
+                              shape: BoxShape.circle),
+                          child: const Icon(Icons.arrow_forward_rounded,
+                              size: 16, color: AppColors.primary),
+                        ),
+                      ]),
+                    ),
+                  ]),
+            ),
           ),
         ),
       ),

@@ -76,6 +76,12 @@ class AppText {
           height: h,
           letterSpacing: ls);
 
+  /// [s] in another weight. Use this instead of `copyWith(fontWeight:)`:
+  /// each Manrope weight is its own font file, and copyWith keeps the old
+  /// file, so the weight would not change.
+  static TextStyle weight(TextStyle s, FontWeight w) =>
+      GoogleFonts.manrope(textStyle: s, fontWeight: w);
+
   /// The Home hero headline: the strongest text in the app.
   static TextStyle get hero =>
       _f(32, FontWeight.w800, AppColors.text, h: 38 / 32, ls: -0.8);
