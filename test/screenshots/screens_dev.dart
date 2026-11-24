@@ -96,6 +96,7 @@ void main() {
   }
 
   withBooking('home', Fx.confirmed, (_) => const HomeScreen(), 2600);
+  withBooking('home_requested', Fx.requested, (_) => const HomeScreen(), 2600);
   both('home_new', const HomeScreen(), 2400);
   withBooking('home_repeat', Fx.completed, (_) => const HomeScreen(), 2400);
   both('services', const ServicesScreen(), 1600, prefs: profile);

@@ -1299,13 +1299,12 @@ class _EcoBanner extends StatelessWidget {
 }
 
 // ── Live booking (only when a booking is in progress) ────────────────────────
-/// Dark status card: when the expert arrives (the slot is the promise, the
-/// planned arrival a hint), and five progress dots.
+/// A light status card in the Home style: the status pill, the service
+/// photo with when it happens, the five-step progress with labels, and the
+/// team's note (for a request: when they will confirm it).
 class _LiveBookingCard extends StatelessWidget {
   final Booking booking;
   const _LiveBookingCard({required this.booking});
-
-  static const _muted = Color(0xFFB8C0C7);
 
   @override
   Widget build(BuildContext context) {
@@ -1317,112 +1316,149 @@ class _LiveBookingCard extends StatelessWidget {
     final line = [
       if (b.status != BookingState.requested)
         'Ready by about ${clockLabel(b.slot.end)}',
-      service?.listName ?? b.service.name,
+      service == null
+          ? b.service.name
+          : (_PopularServices.shortNames[service.id] ?? service.listName),
       carLabel,
     ].join(' · ');
-    final step = progressIndex(b.status);
-    final (chip, _) = chipOf(b.status);
+    final (chip, tone) = chipOf(b.status);
+    final waiting = tone == PillTone.warning;
+    final photo = service == null
+        ? null
+        : (_PopularServices.photos[service.id] ?? service.cardPhoto);
+    final note = b.statusNote.trim();
 
     return Semantics(
       button: true,
-      label: '$chip, ${friendlyDate(b.slot.date)}. '
-          '${headlineOf(b)}. $line. Open booking',
+      label: '$chip. ${headlineOf(b)}. $line. '
+          '${note.isEmpty ? '' : '$note. '}Open booking',
       child: ExcludeSemantics(
-        child: Material(
-          color: AppColors.ink,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: InkWell(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            onTap: () => context.push('/bookings/${b.ref}'),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpace.lg),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x14101828),
+                  blurRadius: 18,
+                  offset: Offset(0, 6)),
+              BoxShadow(
+                  color: Color(0x0A101828),
+                  blurRadius: 2,
+                  offset: Offset(0, 1)),
+            ],
+          ),
+          child: Material(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => context.push('/bookings/${b.ref}'),
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpace.lg, AppSpace.lg, AppSpace.md, 0),
+                      child: Row(children: [
+                        Expanded(
+                          flex: 4,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Pill(chip,
+                                icon: waiting
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.check_circle_rounded,
+                                tone: tone),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        Text('Details',
+                            style: AppText.smallStrong
+                                .copyWith(color: AppColors.primary)),
+                        const Icon(Icons.chevron_right_rounded,
+                            size: 18, color: AppColors.primary),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpace.lg, AppSpace.md, AppSpace.lg, 0),
+                      child: Row(children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppRadius.thumb),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: photo == null
+                                ? const IconBadge(Icons.local_car_wash_rounded,
+                                    size: 56)
+                                : Image.asset(photo,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 168,
+                                    excludeFromSemantics: true),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpace.md),
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(headlineOf(b),
+                                    style: AppText.h3
+                                        .copyWith(color: AppColors.ink)),
+                                const SizedBox(height: 2),
+                                Text(line,
+                                    style: AppText.small,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis),
+                              ]),
+                        ),
+                      ]),
+                    ),
+                    if (progressIndex(b.status) != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                            AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+                        // Dots only: the pill above already names the step.
+                        child: BookingProgress(
+                            status: b.status, showLabels: false),
+                      ),
+                    const SizedBox(height: AppSpace.lg),
+                    // While the team still has to act (confirm a request,
+                    // offer a new time) their note sits in a tinted footer.
+                    // Once confirmed, the headline already says it.
+                    if (waiting && note.isNotEmpty)
                       Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                            color: AppColors.brand, shape: BoxShape.circle),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.lg, vertical: AppSpace.md),
+                        color: waiting
+                            ? AppColors.warningSoft
+                            : AppColors.primarySoft,
+                        child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                  waiting
+                                      ? Icons.chat_bubble_outline_rounded
+                                      : Icons.info_outline_rounded,
+                                  size: 18,
+                                  color: waiting
+                                      ? AppColors.warning
+                                      : AppColors.primaryDk),
+                              const SizedBox(width: AppSpace.sm),
+                              Expanded(
+                                child: Text(note,
+                                    style: AppText.small.copyWith(
+                                        color: waiting
+                                            ? AppColors.warning
+                                            : AppColors.primaryDk)),
+                              ),
+                            ]),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                            '$chip · ${friendlyDate(b.slot.date)}'
-                                .toUpperCase(),
-                            style: AppText.overline
-                                .copyWith(color: AppColors.brand)),
-                      ),
-                      Text('View',
-                          style: AppText.smallStrong.copyWith(color: _muted)),
-                      const Icon(Icons.chevron_right_rounded,
-                          size: 18, color: _muted),
-                    ]),
-                    const SizedBox(height: AppSpace.sm),
-                    Text(headlineOf(b),
-                        style: AppText.h3.copyWith(color: Colors.white)),
-                    const SizedBox(height: 2),
-                    Text(line,
-                        style: AppText.small.copyWith(color: _muted),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    if (step != null) ...[
-                      const SizedBox(height: 14),
-                      _DarkDots(current: step),
-                    ],
                   ]),
             ),
           ),
         ),
       ),
     );
-  }
-}
-
-/// Five progress dots for a dark card.
-class _DarkDots extends StatelessWidget {
-  final int current;
-  const _DarkDots({required this.current});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      for (var i = 0; i < 5; i++) ...[
-        if (i > 0)
-          Expanded(
-            child: Container(
-              height: 3,
-              color: i <= current ? AppColors.brand : const Color(0xFF2A3336),
-            ),
-          ),
-        if (i == current)
-          Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: AppColors.brand,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                    color: AppColors.brand.withValues(alpha: 0.25),
-                    spreadRadius: 4)
-              ],
-            ),
-          )
-        else
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: i < current ? AppColors.brand : null,
-              shape: BoxShape.circle,
-              border: i < current
-                  ? null
-                  : Border.all(color: const Color(0xFF3A4448), width: 2),
-            ),
-          ),
-      ],
-    ]);
   }
 }
