@@ -112,14 +112,11 @@ Shared widgets live in `lib/widgets/`. Screen-private widgets are `_Private` cla
 |---|---|
 | `lib/widgets/service_widgets.dart` | `ServiceImage` (photo or branded tile), `ServiceCard` (home carousel card), `ServiceRow` (list row, exact price if `car:` given), `BrandMark`, `CornerBrandMark` |
 | `lib/widgets/booking_progress.dart` | `BookingProgress(status:, showLabels)` stepper; `progressIndex()`, `headlineOf(Booking)`, `chipOf(BookingState)` → `(label, PillTone)`, the one place booking status words come from |
-| `lib/widgets/how_it_works.dart` | `HowItWorksSteps` |
 | `lib/widgets/motion.dart` | `Reveal` (fade/slide in on scroll), `KenBurns` (slow photo zoom), `PressScale` (tap shrink), `ConfettiBurst` |
 | `lib/widgets/contact_actions.dart` | `openWhatsApp()` (general support only, never booking data), `openLink()`. No phone-call buttons anywhere in the app |
 | `lib/widgets/customer_sheets.dart` | `AddressForm`, `showAddressSheet()` ("Where's your car?": current location, saved addresses as radio cards, blocks not-covered ones, links to `/addresses`), `showAddressForm(existing?)`, `showCarSheet()`, `addressCoverage(ref, address)` (server coverage, area-name fallback), `CoverageChip` |
 | `lib/widgets/offer_card.dart` | `OfferCard.public` (coupon ticket) for an offer from the server (`publicOffersProvider`) |
-| `lib/widgets/book_button.dart` | `BookButton(service, primary)` ("Book now"; filled when `primary`, otherwise outlined) |
 | `lib/widgets/brand_header.dart` | `BrandWithAddress` (logo + wordmark + where the car is), `ParkedAtLine(withOverline)` ("Home · address ⌄", opens the address sheet), `CarPill` (car size, opens the car sheet), `RoundSurface` (bordered pill/circle for header controls) |
-| `lib/widgets/trust_widgets.dart` | `WhyUsStrip(tinted)` (facts from `business_info.dart` only; `tinted` = mint background), `HelpCard(title, line, message)` (WhatsApp support) |
 | `lib/screens/auth/login_screen.dart` | `CarTypePicker` (radio list: size, example models, optional price), reused by sign-up and the car sheet |
 | `lib/screens/addresses_screen.dart` | `AddressesScreen` (`/addresses`); `AddressesScreen.bookingUsing()` blocks deleting an address an upcoming booking uses |
 

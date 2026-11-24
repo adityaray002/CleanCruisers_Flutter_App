@@ -97,7 +97,6 @@ lib/
 └── widgets/
     ├── ui.dart                 — Buttons, cards, pills, empty states, bottom action bar
     ├── service_widgets.dart    — Service image, card and row
-    ├── how_it_works.dart
     └── contact_actions.dart    — WhatsApp / call / link helpers with error handling
 ```
 
